@@ -1,0 +1,47 @@
+# C/C++ build artifacts
+*.o
+*.exe
+*.out
+*.so
+*.a
+game_server
+
+# Qt build artifacts
+*.pro.user
+*.pro.user.*
+moc_*.cpp
+*.moc
+qrc_*.cpp
+ui_*.h
+Makefile
+Makefile.*
+object_script.*
+.qmake.stash
+
+# Build directories
+build/
+build-*/
+debug/
+release/
+*-build-*/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# User data
+server/users.txt
+
+# Temporary files
+*.tmp
+*.bak
+*.log
+

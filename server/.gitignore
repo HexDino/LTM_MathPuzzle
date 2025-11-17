@@ -1,0 +1,17 @@
+# Build files
+*.o
+game_server
+
+# User database
+users.txt
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Logs
+*.log
+
