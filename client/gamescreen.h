@@ -58,6 +58,7 @@ private:
     NetworkManager *networkManager;
     
     // UI components
+    QLabel *roundLabel;
     QLabel *equationLabel;
     QLabel *timerLabel;
     MatrixWidget *matrixWidgets[4];

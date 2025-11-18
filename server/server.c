@@ -100,15 +100,29 @@ void server_run(Server *server) {
                     
                     if (server->rooms[i].game_time_remaining <= 0) {
                         // Time's up!
-                        room_end_game(server, i, 0);
+                        room_end_game(server, i, 0, 1);  // 1 = timeout
                     } else {
                         broadcast_timer_update(server, i);
                     }
                 }
             }
             
+            // Send room status updates every 2 seconds for active rooms (not in game)
+            static time_t last_room_update = 0;
+            if (now - last_room_update >= 2) {
+                for (int i = 0; i < MAX_ROOMS; i++) {
+                    if (server->rooms[i].active && !server->rooms[i].game_started) {
+                        send_room_status(server, i);
+                    }
+                }
+                last_room_update = now;
+            }
+            
             // Check ping timeouts
             check_ping_timeouts(server);
+            
+            // Check reconnect timeouts
+            check_reconnect_timeouts(server);
             
             // Send PING every interval
             static time_t last_ping = 0;
@@ -173,14 +187,45 @@ int client_accept(Server *server) {
 }
 
 // Disconnect client
+// Mark client as disconnected (allow reconnect)
+void client_mark_disconnected(Server *server, int client_idx) {
+    Client *client = &server->clients[client_idx];
+    
+    if (!client->active) return;
+    
+    printf("Client disconnected: %s (socket %d), allowing reconnect...\n", 
+           client->username[0] ? client->username : "unknown", 
+           client->socket_fd);
+    
+    // Save state before disconnect
+    client->saved_state = client->state;
+    client->state = STATE_DISCONNECTED;
+    client->disconnect_time = time(NULL);
+    
+    // Close socket but keep client data
+    FD_CLR(client->socket_fd, &server->master_set);
+    close(client->socket_fd);
+    client->socket_fd = -1;
+    
+    // If in a room, notify other players (but don't remove yet)
+    if (client->room_id >= 0) {
+        char msg[256];
+        snprintf(msg, sizeof(msg), "PLAYER_DISCONNECTED|%s\n", client->username);
+        room_broadcast(server, client->room_id, msg, client_idx);
+        
+        printf("Player %s in room %d marked as disconnected. Waiting for reconnect...\n",
+               client->username, client->room_id);
+    }
+}
+
+// Permanently disconnect client (cleanup)
 void client_disconnect(Server *server, int client_idx) {
     Client *client = &server->clients[client_idx];
     
     if (!client->active) return;
     
-    printf("Client disconnected: %s (socket %d)\n", 
-           client->username[0] ? client->username : "unknown", 
-           client->socket_fd);
+    printf("Permanently disconnecting client: %s\n", 
+           client->username[0] ? client->username : "unknown");
     
     // If in a room, handle room cleanup
     if (client->room_id >= 0) {
@@ -212,12 +257,16 @@ void client_disconnect(Server *server, int client_idx) {
         }
     }
     
-    // Remove from fd_set
-    FD_CLR(client->socket_fd, &server->master_set);
-    close(client->socket_fd);
+    // Remove from fd_set if still open
+    if (client->socket_fd >= 0) {
+        FD_CLR(client->socket_fd, &server->master_set);
+        close(client->socket_fd);
+    }
     
     // Clear client data
     client->active = 0;
+    client->state = STATE_CONNECTED;
+    client->room_id = -1;
 }
 
 // Process incoming data from client (Stream processing with buffer)
@@ -228,8 +277,8 @@ void client_process_data(Server *server, int client_idx) {
     int bytes_read = recv(client->socket_fd, temp_buf, sizeof(temp_buf) - 1, 0);
     
     if (bytes_read <= 0) {
-        // Connection closed or error
-        client_disconnect(server, client_idx);
+        // Connection closed or error - mark as disconnected (allow reconnect)
+        client_mark_disconnected(server, client_idx);
         return;
     }
     
@@ -310,6 +359,9 @@ void handle_message(Server *server, int client_idx, const char *message) {
         int room_id = atoi(arg1);
         handle_join_room(server, client_idx, room_id);
     }
+    else if (strcmp(cmd, "LEAVE_ROOM") == 0) {
+        handle_leave_room(server, client_idx);
+    }
     else if (strcmp(cmd, "LIST_ROOMS") == 0) {
         send_room_list(server, client_idx);
     }
@@ -333,6 +385,26 @@ void handle_message(Server *server, int client_idx, const char *message) {
     }
     else {
         client_send(client, "ERROR|Unknown command\n");
+    }
+}
+
+// Check for disconnected clients that exceed reconnect timeout
+void check_reconnect_timeouts(Server *server) {
+    time_t now = time(NULL);
+    
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        Client *client = &server->clients[i];
+        
+        if (client->active && client->state == STATE_DISCONNECTED) {
+            time_t elapsed = now - client->disconnect_time;
+            
+            if (elapsed >= RECONNECT_TIMEOUT) {
+                printf("Reconnect timeout for %s, permanently disconnecting...\n", client->username);
+                
+                // Permanently disconnect
+                client_disconnect(server, i);
+            }
+        }
     }
 }
 

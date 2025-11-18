@@ -18,7 +18,6 @@ LoginScreen::LoginScreen(NetworkManager *network, QWidget *parent)
     connect(networkManager, &NetworkManager::loginSuccessful, this, &LoginScreen::onLoginSuccessful);
     connect(networkManager, &NetworkManager::registerSuccessful, this, &LoginScreen::onRegisterSuccessful);
     connect(networkManager, &NetworkManager::connectionError, this, &LoginScreen::onError);
-    connect(networkManager, &NetworkManager::authError, this, &LoginScreen::onError);
     connect(networkManager, &NetworkManager::errorReceived, this, &LoginScreen::onError);
     
     updateUIState();
@@ -46,6 +45,7 @@ void LoginScreen::setupUI()
     
     // Connection group
     QGroupBox *connectionGroup = new QGroupBox("Server Connection", this);
+    connectionGroup->setStyleSheet("QGroupBox { font-size: 12pt; font-weight: bold; }");
     QFormLayout *connLayout = new QFormLayout(connectionGroup);
     
     serverEdit = new QLineEdit("localhost", this);
@@ -64,6 +64,7 @@ void LoginScreen::setupUI()
     
     // Authentication group
     QGroupBox *authGroup = new QGroupBox("Login / Register", this);
+    authGroup->setStyleSheet("QGroupBox { font-size: 12pt; font-weight: bold; }");
     QFormLayout *authLayout = new QFormLayout(authGroup);
     
     usernameEdit = new QLineEdit(this);

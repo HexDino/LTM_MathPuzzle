@@ -16,8 +16,7 @@ LobbyScreen::LobbyScreen(NetworkManager *network, QWidget *parent)
             this, &LobbyScreen::onRoomListReceived);
     connect(networkManager, &NetworkManager::roomCreated, 
             this, &LobbyScreen::onRoomCreated);
-    connect(networkManager, &NetworkManager::errorReceived, 
-            this, &LobbyScreen::onError);
+    // Note: errorReceived is handled by LoginScreen only to avoid duplicate message boxes
 }
 
 void LobbyScreen::setupUI()
@@ -33,10 +32,33 @@ void LobbyScreen::setupUI()
     welcomeLabel->setAlignment(Qt::AlignCenter);
     mainLayout->addWidget(welcomeLabel);
     
+    mainLayout->addSpacing(15);
+    
+    // Create room group (MOVED TO TOP - more prominent)
+    QGroupBox *createGroup = new QGroupBox("Create New Room", this);
+    createGroup->setStyleSheet("QGroupBox { font-size: 12pt; font-weight: bold; }");
+    
+    QVBoxLayout *createMainLayout = new QVBoxLayout(createGroup);
+    QHBoxLayout *createLayout = new QHBoxLayout();
+    
+    roomNameEdit = new QLineEdit(this);
+    roomNameEdit->setPlaceholderText("Enter room name...");
+    roomNameEdit->setMinimumHeight(35);
+    
+    createButton = new QPushButton("Create Room", this);
+    createButton->setMinimumHeight(35);
+    createButton->setMinimumWidth(120);
+    
+    createLayout->addWidget(roomNameEdit, 2);
+    createLayout->addWidget(createButton, 1);
+    createMainLayout->addLayout(createLayout);
+    
+    mainLayout->addWidget(createGroup);
     mainLayout->addSpacing(20);
     
     // Room list group
     QGroupBox *roomListGroup = new QGroupBox("Available Rooms", this);
+    roomListGroup->setStyleSheet("QGroupBox { font-size: 12pt; font-weight: bold; }");
     QVBoxLayout *listLayout = new QVBoxLayout(roomListGroup);
     
     // Room table
@@ -60,24 +82,12 @@ void LobbyScreen::setupUI()
     
     mainLayout->addWidget(roomListGroup);
     
-    // Create room group
-    QGroupBox *createGroup = new QGroupBox("Create New Room", this);
-    QHBoxLayout *createLayout = new QHBoxLayout(createGroup);
-    
-    roomNameEdit = new QLineEdit(this);
-    roomNameEdit->setPlaceholderText("Enter room name...");
-    createButton = new QPushButton("Create Room", this);
-    
-    createLayout->addWidget(roomNameEdit);
-    createLayout->addWidget(createButton);
-    
-    mainLayout->addWidget(createGroup);
-    
     // Connect signals
     connect(refreshButton, &QPushButton::clicked, this, &LobbyScreen::onRefreshClicked);
     connect(createButton, &QPushButton::clicked, this, &LobbyScreen::onCreateRoomClicked);
     connect(joinButton, &QPushButton::clicked, this, &LobbyScreen::onJoinRoomClicked);
     connect(roomNameEdit, &QLineEdit::returnPressed, this, &LobbyScreen::onCreateRoomClicked);
+    connect(roomTable, &QTableWidget::cellDoubleClicked, this, &LobbyScreen::onRoomDoubleClicked);
 }
 
 void LobbyScreen::refresh()
@@ -115,6 +125,14 @@ void LobbyScreen::onJoinRoomClicked()
     
     int roomId = roomTable->item(selectedRow, 0)->text().toInt();
     networkManager->sendJoinRoom(roomId);
+}
+
+void LobbyScreen::onRoomDoubleClicked(int row, int /* column */)
+{
+    if (row >= 0 && row < roomTable->rowCount()) {
+        int roomId = roomTable->item(row, 0)->text().toInt();
+        networkManager->sendJoinRoom(roomId);
+    }
 }
 
 void LobbyScreen::onRoomListReceived(const QVector<RoomInfo> &rooms)

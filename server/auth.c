@@ -83,29 +83,89 @@ void handle_login(Server *server, int client_idx, const char *username, const ch
         return;
     }
     
-    // Check if already logged in
+    // Check if user is disconnected and can reconnect
+    int disconnected_idx = -1;
     for (int i = 0; i < MAX_CLIENTS; i++) {
         if (server->clients[i].active && i != client_idx &&
             strcmp(server->clients[i].username, username) == 0) {
-            client_send(client, "ERROR|User already logged in\n");
-            return;
+            
+            if (server->clients[i].state == STATE_DISCONNECTED) {
+                time_t elapsed = time(NULL) - server->clients[i].disconnect_time;
+                if (elapsed < RECONNECT_TIMEOUT) {
+                    disconnected_idx = i;
+                    break;
+                }
+            } else {
+                client_send(client, "ERROR|User already logged in\n");
+                return;
+            }
         }
     }
     
-    if (authenticate_user(username, password)) {
-        strncpy(client->username, username, MAX_USERNAME - 1);
-        client->state = STATE_IN_LOBBY;
-        
-        char msg[128];
-        snprintf(msg, sizeof(msg), "LOGIN_OK|%s\n", username);
-        client_send(client, msg);
-        
-        printf("User logged in: %s\n", username);
-        
-        // Send room list
-        send_room_list(server, client_idx);
-    } else {
+    if (!authenticate_user(username, password)) {
         client_send(client, "ERROR|Invalid username or password\n");
+        return;
     }
+    
+    // Handle reconnection
+    if (disconnected_idx >= 0) {
+        Client *old_client = &server->clients[disconnected_idx];
+        
+        printf("User %s reconnecting! Restoring session...\n", username);
+        
+        // Transfer state to new connection
+        int old_room_id = old_client->room_id;
+        int old_player_index = old_client->player_index;
+        ClientState old_state = old_client->saved_state;
+        
+        // Copy username and restore state to new client
+        strncpy(client->username, username, MAX_USERNAME - 1);
+        client->state = old_state;
+        client->room_id = old_room_id;
+        client->player_index = old_player_index;
+        
+        // Update room's player_ids to point to new client
+        if (old_room_id >= 0) {
+            Room *room = &server->rooms[old_room_id];
+            room->player_ids[old_player_index] = client_idx;
+            
+            // Notify other players of reconnection
+            char msg[256];
+            snprintf(msg, sizeof(msg), "PLAYER_RECONNECTED|%s\n", username);
+            room_broadcast(server, old_room_id, msg, -1);
+        }
+        
+        // Clear old client slot
+        old_client->active = 0;
+        old_client->state = STATE_CONNECTED;
+        old_client->room_id = -1;
+        
+        // Send reconnect success
+        char response[128];
+        snprintf(response, sizeof(response), "RECONNECT_OK|%s\n", username);
+        client_send(client, response);
+        
+        // Send room status if in room
+        if (old_room_id >= 0) {
+            send_room_status(server, old_room_id);
+        } else {
+            send_room_list(server, client_idx);
+        }
+        
+        return;
+    }
+    
+    // Normal login
+    strncpy(client->username, username, MAX_USERNAME - 1);
+    client->state = STATE_IN_LOBBY;
+    
+    char msg[128];
+    snprintf(msg, sizeof(msg), "LOGIN_OK|%s\n", username);
+    client_send(client, msg);
+    
+    printf("User logged in: %s\n", username);
+    
+    // Send room list
+    send_room_list(server, client_idx);
 }
 

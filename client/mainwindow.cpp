@@ -96,11 +96,19 @@ void MainWindow::connectSignals()
     connect(networkManager, &NetworkManager::roomJoined, 
             stateMachine, &GameStateMachine::transitionToRoom);
     
+    connect(networkManager, &NetworkManager::leftRoom, 
+            stateMachine, &GameStateMachine::transitionToLobby);
+    
     connect(networkManager, &NetworkManager::gameStarted, 
             stateMachine, &GameStateMachine::transitionToGame);
     
     connect(networkManager, &NetworkManager::gameEnded, 
             stateMachine, &GameStateMachine::transitionToResult);
+    
+    connect(networkManager, &NetworkManager::gameAborted, [this](const QString &reason) {
+        QMessageBox::warning(this, "Game Aborted", reason);
+        stateMachine->transitionToLobby();
+    });
     
     // Connect back to room button
     connect(resultScreen, &ResultScreen::backToRoomRequested,

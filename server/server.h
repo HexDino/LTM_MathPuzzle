@@ -25,6 +25,7 @@
 #define GAME_DURATION 180  // 3 minutes in seconds
 #define PING_INTERVAL 10   // Send PING every 10 seconds
 #define PING_TIMEOUT 30    // Disconnect if no PONG after 30 seconds
+#define RECONNECT_TIMEOUT 60  // Allow reconnect within 60 seconds
 
 // Client states
 typedef enum {
@@ -33,15 +34,24 @@ typedef enum {
     STATE_IN_LOBBY,
     STATE_IN_ROOM,
     STATE_READY,
-    STATE_IN_GAME
+    STATE_IN_GAME,
+    STATE_DISCONNECTED  // Temporarily disconnected, can reconnect
 } ClientState;
 
 // Game operators
 typedef enum {
     OP_ADD,
     OP_SUB,
-    OP_MUL
+    OP_MUL,
+    OP_DIV
 } Operator;
+
+// Equation format types
+typedef enum {
+    FORMAT_P1_P2_P3_EQ_P4,   // P1 ± P2 ± P3 = P4
+    FORMAT_P1_EQ_P2_P3_P4,   // P1 = P2 ± P3 ± P4
+    FORMAT_P1_P2_EQ_P3_P4    // P1 ± P2 = P3 ± P4
+} EquationFormat;
 
 // Matrix structure
 typedef struct {
@@ -51,12 +61,15 @@ typedef struct {
 // Puzzle structure
 typedef struct {
     Operator op1;  // Between P1 and P2
-    Operator op2;  // Between result and P3
+    Operator op2;  // Between P2/P3 and P3/P4 (depends on format)
+    Operator op3;  // For 3-operator formats
+    EquationFormat format;
     Matrix matrices[PLAYERS_PER_ROOM];
     int solution_row[PLAYERS_PER_ROOM];
     int solution_col[PLAYERS_PER_ROOM];
     int solution_values[PLAYERS_PER_ROOM];
     int result;
+    int round;  // Current round (1-5)
 } Puzzle;
 
 // Room structure
@@ -75,6 +88,8 @@ typedef struct {
     int submitted_answers[PLAYERS_PER_ROOM][2];  // [row, col]
     int answer_submitted[PLAYERS_PER_ROOM];
     int all_submitted;
+    int current_round;  // Current round (1-5)
+    int total_rounds;   // Total rounds to win (default 5)
 } Room;
 
 // Client structure
@@ -89,6 +104,8 @@ typedef struct {
     int player_index;  // 0-3 in room
     time_t last_pong_time;
     time_t last_ping_time;
+    time_t disconnect_time;  // Time when client disconnected
+    ClientState saved_state;  // State before disconnect
 } Client;
 
 // Server state
@@ -111,6 +128,8 @@ void server_shutdown(Server *server);
 // Client management
 int client_accept(Server *server);
 void client_disconnect(Server *server, int client_idx);
+void client_mark_disconnected(Server *server, int client_idx);
+void check_reconnect_timeouts(Server *server);
 void client_process_data(Server *server, int client_idx);
 void client_send(Client *client, const char *message);
 
@@ -120,6 +139,7 @@ void handle_register(Server *server, int client_idx, const char *username, const
 void handle_login(Server *server, int client_idx, const char *username, const char *password);
 void handle_create_room(Server *server, int client_idx, const char *room_name);
 void handle_join_room(Server *server, int client_idx, int room_id);
+void handle_leave_room(Server *server, int client_idx);
 void handle_ready(Server *server, int client_idx);
 void handle_start_game(Server *server, int client_idx);
 void handle_submit(Server *server, int client_idx, int row, int col);
@@ -130,12 +150,12 @@ void handle_chat(Server *server, int client_idx, const char *message);
 int room_create(Server *server, const char *name);
 int room_join(Server *server, int room_id, int client_idx);
 void room_start_game(Server *server, int room_id);
-void room_end_game(Server *server, int room_id, int won);
+void room_end_game(Server *server, int room_id, int won, int timeout);
 void room_broadcast(Server *server, int room_id, const char *message, int exclude_client_idx);
 void room_cleanup(Server *server, int room_id);
 
 // Game logic
-void puzzle_generate(Puzzle *puzzle);
+void puzzle_generate(Puzzle *puzzle, int round);
 void puzzle_send_to_clients(Server *server, int room_id);
 int puzzle_verify_solution(Puzzle *puzzle, int submitted[PLAYERS_PER_ROOM][2]);
 

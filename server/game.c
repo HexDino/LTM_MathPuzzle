@@ -6,7 +6,19 @@ char* get_operator_string(Operator op) {
         case OP_ADD: return "+";
         case OP_SUB: return "-";
         case OP_MUL: return "*";
+        case OP_DIV: return "/";
         default: return "?";
+    }
+}
+
+// Apply operator
+int apply_operator(int a, Operator op, int b) {
+    switch (op) {
+        case OP_ADD: return a + b;
+        case OP_SUB: return a - b;
+        case OP_MUL: return a * b;
+        case OP_DIV: return (b != 0) ? a / b : a;
+        default: return a;
     }
 }
 
@@ -34,43 +46,110 @@ int calculate_result(int p1, Operator op1, int p2, Operator op2, int p3) {
     else return temp * p3;
 }
 
-// Generate random puzzle
-void puzzle_generate(Puzzle *puzzle) {
-    // Bước 1: Tạo random operators
-    puzzle->op1 = rand() % 3;  // 0=ADD, 1=SUB, 2=MUL
-    puzzle->op2 = rand() % 3;
+// Generate random puzzle based on round difficulty
+void puzzle_generate(Puzzle *puzzle, int round) {
+    puzzle->round = round;
+    int p1, p2, p3, p4;
+    int min_val, max_val;
+    int allow_negative = 0;
     
-    // Bước 2: Tạo phương trình có ý nghĩa trước - chọn 4 số làm solution
-    int p1 = (rand() % 99) + 1;
-    int p2 = (rand() % 99) + 1;
-    int p3 = (rand() % 99) + 1;
-    int p4 = calculate_result(p1, puzzle->op1, p2, puzzle->op2, p3);
+    // Configure difficulty based on round
+    switch (round) {
+        case 1: // Easy: Addition/Subtraction, format P1 ± P2 ± P3 = P4
+            puzzle->format = FORMAT_P1_P2_P3_EQ_P4;
+            puzzle->op1 = rand() % 2;  // Only ADD or SUB
+            puzzle->op2 = rand() % 2;
+            min_val = 1; max_val = 50;
+            break;
+            
+        case 2: // Medium: Add/Sub with larger numbers, format P1 ± P2 = P3 ± P4
+            puzzle->format = FORMAT_P1_P2_EQ_P3_P4;
+            puzzle->op1 = rand() % 2;
+            puzzle->op2 = rand() % 2;
+            min_val = 10; max_val = 80;
+            break;
+            
+        case 3: // Hard: Include multiplication, format P1 = P2 * P3 ± P4
+            puzzle->format = FORMAT_P1_EQ_P2_P3_P4;
+            puzzle->op1 = OP_MUL;
+            puzzle->op2 = rand() % 2;  // ADD or SUB
+            min_val = 2; max_val = 30;
+            break;
+            
+        case 4: // Very Hard: Mixed operations, format P1 * P2 = P3 ± P4
+            puzzle->format = FORMAT_P1_P2_EQ_P3_P4;
+            puzzle->op1 = OP_MUL;
+            puzzle->op2 = rand() % 3;  // ADD, SUB, or MUL
+            min_val = 2; max_val = 40;
+            break;
+            
+        case 5: // Expert: All operations + negative numbers, format P1 * P2 ± P3 = P4
+            puzzle->format = FORMAT_P1_P2_P3_EQ_P4;
+            puzzle->op1 = (rand() % 2) ? OP_MUL : OP_DIV;
+            puzzle->op2 = rand() % 3;
+            min_val = -20; max_val = 50;
+            allow_negative = 1;
+            break;
+            
+        default:
+            puzzle->format = FORMAT_P1_P2_P3_EQ_P4;
+            puzzle->op1 = rand() % 2;
+            puzzle->op2 = rand() % 2;
+            min_val = 1; max_val = 50;
+    }
     
-    // Lưu các solution values
+    // Generate values based on equation format
+    switch (puzzle->format) {
+        case FORMAT_P1_P2_P3_EQ_P4: // P1 op1 P2 op2 P3 = P4
+            p1 = (rand() % (max_val - min_val + 1)) + min_val;
+            p2 = (rand() % (max_val - min_val + 1)) + min_val;
+            p3 = (rand() % (max_val - min_val + 1)) + min_val;
+            p4 = apply_operator(apply_operator(p1, puzzle->op1, p2), puzzle->op2, p3);
+            break;
+            
+        case FORMAT_P1_EQ_P2_P3_P4: // P1 = P2 op1 P3 op2 P4
+            p2 = (rand() % (max_val - min_val + 1)) + min_val;
+            p3 = (rand() % (max_val - min_val + 1)) + min_val;
+            p4 = (rand() % (max_val - min_val + 1)) + min_val;
+            p1 = apply_operator(apply_operator(p2, puzzle->op1, p3), puzzle->op2, p4);
+            break;
+            
+        case FORMAT_P1_P2_EQ_P3_P4: // P1 op1 P2 = P3 op2 P4
+            p3 = (rand() % (max_val - min_val + 1)) + min_val;
+            p4 = (rand() % (max_val - min_val + 1)) + min_val;
+            p1 = (rand() % (max_val - min_val + 1)) + min_val;
+            p2 = apply_operator(p3, puzzle->op2, p4) - p1;
+            if (puzzle->op1 == OP_SUB) p2 = -p2;
+            break;
+    }
+    
+    // Store solution values
     puzzle->solution_values[0] = p1;
     puzzle->solution_values[1] = p2;
     puzzle->solution_values[2] = p3;
     puzzle->solution_values[3] = p4;
-    puzzle->result = p4;
+    puzzle->result = (puzzle->format == FORMAT_P1_EQ_P2_P3_P4) ? p1 : p4;
     
-    // Bước 3: Tạo 4 ma trận với số ngẫu nhiên, sau đó đặt solution vào vị trí ngẫu nhiên
+    // Generate matrices with random numbers
     for (int m = 0; m < PLAYERS_PER_ROOM; m++) {
-        // Fill ma trận với số ngẫu nhiên
         for (int i = 0; i < MATRIX_SIZE; i++) {
             for (int j = 0; j < MATRIX_SIZE; j++) {
-                puzzle->matrices[m].data[i][j] = (rand() % 99) + 1;
+                if (allow_negative) {
+                    puzzle->matrices[m].data[i][j] = (rand() % (max_val - min_val + 1)) + min_val;
+                } else {
+                    puzzle->matrices[m].data[i][j] = (rand() % max_val) + 1;
+                }
             }
         }
         
-        // Chọn vị trí ngẫu nhiên để đặt solution value
+        // Place solution value at random position
         puzzle->solution_row[m] = rand() % MATRIX_SIZE;
         puzzle->solution_col[m] = rand() % MATRIX_SIZE;
-        
-        // Đặt solution value vào vị trí đã chọn (đảm bảo tồn tại trong ma trận)
         puzzle->matrices[m].data[puzzle->solution_row[m]][puzzle->solution_col[m]] = puzzle->solution_values[m];
     }
     
-    printf("Puzzle generated: P1(%d) %s P2(%d) %s P3(%d) = P4(%d)\n",
+    printf("Round %d puzzle generated (format %d): P1(%d) %s P2(%d) %s P3(%d) = P4(%d)\n",
+           round, puzzle->format,
            puzzle->solution_values[0], get_operator_string(puzzle->op1),
            puzzle->solution_values[1], get_operator_string(puzzle->op2),
            puzzle->solution_values[2], puzzle->solution_values[3]);
@@ -94,10 +173,32 @@ void puzzle_send_to_clients(Server *server, int room_id) {
         // Format: GAME_START|equation|matrix0|matrix1|matrix2|matrix3
         // matrix format: 16 numbers separated by commas (or HIDDEN)
         
+        // Build equation string based on format
+        char equation[128];
+        switch (puzzle->format) {
+            case FORMAT_P1_P2_P3_EQ_P4:
+                snprintf(equation, sizeof(equation), "P1%sP2%sP3=P4",
+                        get_operator_string(puzzle->op1),
+                        get_operator_string(puzzle->op2));
+                break;
+            case FORMAT_P1_EQ_P2_P3_P4:
+                snprintf(equation, sizeof(equation), "P1=P2%sP3%sP4",
+                        get_operator_string(puzzle->op1),
+                        get_operator_string(puzzle->op2));
+                break;
+            case FORMAT_P1_P2_EQ_P3_P4:
+                snprintf(equation, sizeof(equation), "P1%sP2=P3%sP4",
+                        get_operator_string(puzzle->op1),
+                        get_operator_string(puzzle->op2));
+                break;
+            default:
+                snprintf(equation, sizeof(equation), "P1%sP2%sP3=P4",
+                        get_operator_string(puzzle->op1),
+                        get_operator_string(puzzle->op2));
+        }
+        
         offset += snprintf(buffer + offset, sizeof(buffer) - offset,
-                         "GAME_START|P1%sP2%sP3=P4",
-                         get_operator_string(puzzle->op1),
-                         get_operator_string(puzzle->op2));
+                         "GAME_START|%s", equation);
         
         // Send all matrices except the player's own
         for (int m = 0; m < PLAYERS_PER_ROOM; m++) {
@@ -122,7 +223,9 @@ void puzzle_send_to_clients(Server *server, int room_id) {
             }
         }
         
-        offset += snprintf(buffer + offset, sizeof(buffer) - offset, "\n");
+        // Add round info at the end
+        offset += snprintf(buffer + offset, sizeof(buffer) - offset, "|%d|%d\n",
+                         room->current_round, room->total_rounds);
         
         client_send(client, buffer);
         printf("Sent puzzle to player %d (hiding matrix %d)\n", player, player);
@@ -133,10 +236,16 @@ void puzzle_send_to_clients(Server *server, int room_id) {
 void room_start_game(Server *server, int room_id) {
     Room *room = &server->rooms[room_id];
     
-    printf("Starting game in room %d\n", room_id);
+    // Initialize round system on first start
+    if (!room->game_started) {
+        room->current_round = 1;
+        room->total_rounds = 5;
+    }
     
-    // Generate puzzle
-    puzzle_generate(&room->puzzle);
+    printf("Starting game in room %d, round %d/%d\n", room_id, room->current_round, room->total_rounds);
+    
+    // Generate puzzle for current round
+    puzzle_generate(&room->puzzle, room->current_round);
     
     // Initialize game state
     room->game_started = 1;
@@ -157,30 +266,77 @@ void room_start_game(Server *server, int room_id) {
 }
 
 // End game in room
-void room_end_game(Server *server, int room_id, int won) {
+void room_end_game(Server *server, int room_id, int won, int timeout) {
     Room *room = &server->rooms[room_id];
     
-    printf("Ending game in room %d, result: %s\n", room_id, won ? "WIN" : "LOSE");
+    printf("Ending round %d in room %d, result: %s\n", room->current_round, room_id, won ? "WIN" : "LOSE");
     
     char msg[512];
     if (won) {
-        snprintf(msg, sizeof(msg), "GAME_END|WIN|Congratulations!\n");
+        // Check if there are more rounds
+        if (room->current_round < room->total_rounds) {
+            // Continue to next round
+            snprintf(msg, sizeof(msg), "GAME_END|WIN|Round %d complete! Starting round %d...\n",
+                    room->current_round, room->current_round + 1);
+            room_broadcast(server, room_id, msg, -1);
+            
+            // Increment round and start next round
+            room->current_round++;
+            room_start_game(server, room_id);
+            return;  // Don't reset room state
+        } else {
+            // All rounds completed - player wins!
+            snprintf(msg, sizeof(msg), "GAME_END|WIN|Congratulations! You completed all %d rounds!\n",
+                    room->total_rounds);
+        }
     } else {
-        // Show the correct solution
-        snprintf(msg, sizeof(msg), 
-                "GAME_END|LOSE|Time's up! Solution: P1[%d,%d]=%d %s P2[%d,%d]=%d %s P3[%d,%d]=%d = P4[%d,%d]=%d\n",
-                room->puzzle.solution_row[0], room->puzzle.solution_col[0], room->puzzle.solution_values[0],
-                get_operator_string(room->puzzle.op1),
-                room->puzzle.solution_row[1], room->puzzle.solution_col[1], room->puzzle.solution_values[1],
-                get_operator_string(room->puzzle.op2),
-                room->puzzle.solution_row[2], room->puzzle.solution_col[2], room->puzzle.solution_values[2],
-                room->puzzle.solution_row[3], room->puzzle.solution_col[3], room->puzzle.solution_values[3]);
+        // Show the correct solution with reason based on equation format
+        const char *reason = timeout ? "Time's up!" : "Wrong answer!";
+        char solution[256];
+        
+        switch (room->puzzle.format) {
+            case FORMAT_P1_P2_P3_EQ_P4:
+                snprintf(solution, sizeof(solution),
+                        "P1[%d,%d]=%d %s P2[%d,%d]=%d %s P3[%d,%d]=%d = P4[%d,%d]=%d",
+                        room->puzzle.solution_row[0], room->puzzle.solution_col[0], room->puzzle.solution_values[0],
+                        get_operator_string(room->puzzle.op1),
+                        room->puzzle.solution_row[1], room->puzzle.solution_col[1], room->puzzle.solution_values[1],
+                        get_operator_string(room->puzzle.op2),
+                        room->puzzle.solution_row[2], room->puzzle.solution_col[2], room->puzzle.solution_values[2],
+                        room->puzzle.solution_row[3], room->puzzle.solution_col[3], room->puzzle.solution_values[3]);
+                break;
+                
+            case FORMAT_P1_EQ_P2_P3_P4:
+                snprintf(solution, sizeof(solution),
+                        "P1[%d,%d]=%d = P2[%d,%d]=%d %s P3[%d,%d]=%d %s P4[%d,%d]=%d",
+                        room->puzzle.solution_row[0], room->puzzle.solution_col[0], room->puzzle.solution_values[0],
+                        room->puzzle.solution_row[1], room->puzzle.solution_col[1], room->puzzle.solution_values[1],
+                        get_operator_string(room->puzzle.op1),
+                        room->puzzle.solution_row[2], room->puzzle.solution_col[2], room->puzzle.solution_values[2],
+                        get_operator_string(room->puzzle.op2),
+                        room->puzzle.solution_row[3], room->puzzle.solution_col[3], room->puzzle.solution_values[3]);
+                break;
+                
+            case FORMAT_P1_P2_EQ_P3_P4:
+                snprintf(solution, sizeof(solution),
+                        "P1[%d,%d]=%d %s P2[%d,%d]=%d = P3[%d,%d]=%d %s P4[%d,%d]=%d",
+                        room->puzzle.solution_row[0], room->puzzle.solution_col[0], room->puzzle.solution_values[0],
+                        get_operator_string(room->puzzle.op1),
+                        room->puzzle.solution_row[1], room->puzzle.solution_col[1], room->puzzle.solution_values[1],
+                        room->puzzle.solution_row[2], room->puzzle.solution_col[2], room->puzzle.solution_values[2],
+                        get_operator_string(room->puzzle.op2),
+                        room->puzzle.solution_row[3], room->puzzle.solution_col[3], room->puzzle.solution_values[3]);
+                break;
+        }
+        
+        snprintf(msg, sizeof(msg), "GAME_END|LOSE|%s|%s\n", reason, solution);
     }
     
     room_broadcast(server, room_id, msg, -1);
     
     // Reset room state
     room->game_started = 0;
+    room->current_round = 0;
     for (int i = 0; i < PLAYERS_PER_ROOM; i++) {
         room->player_ready[i] = 0;
         int client_idx = room->player_ids[i];
@@ -251,7 +407,7 @@ void handle_submit(Server *server, int client_idx, int row, int col) {
     if (all_submitted) {
         // Verify solution
         int correct = puzzle_verify_solution(&room->puzzle, room->submitted_answers);
-        room_end_game(server, room_id, correct);
+        room_end_game(server, room_id, correct, 0);  // 0 = not timeout
     }
 }
 

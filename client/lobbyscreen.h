@@ -21,6 +21,7 @@ private slots:
     void onRefreshClicked();
     void onCreateRoomClicked();
     void onJoinRoomClicked();
+    void onRoomDoubleClicked(int row, int column);
     void onRoomListReceived(const QVector<RoomInfo> &rooms);
     void onRoomCreated(int roomId, const QString &roomName);
     void onError(const QString &error);

@@ -24,6 +24,9 @@ private:
     NetworkManager *networkManager;
     
     QLabel *resultLabel;
+    QLabel *reasonLabel;
+    QLabel *solutionTitleLabel;
+    QLabel *solutionLabel;
     QLabel *messageLabel;
     QPushButton *backButton;
     

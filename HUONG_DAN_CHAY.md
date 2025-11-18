@@ -126,7 +126,21 @@ chmod +x game_server
 3. Chọn file `client/MathPuzzleClient.pro`
 4. Chọn **Kit** (ví dụ: Desktop Qt 5.15.2 MinGW)
 
-#### Bước 3: Build và Run
+#### Bước 3: Cấu hình kết nối
+
+**Chơi trên cùng một máy (localhost):**
+- Server: `localhost`
+- Port: `8888`
+
+**Chơi qua mạng LAN (nhiều máy):**
+- Người host server cần:
+  1. Chạy `ipconfig` (Windows) hoặc `hostname -I` (Linux) để lấy địa chỉ IP
+  2. Mở port 8888 trên firewall (xem phần "Kết nối qua mạng LAN" bên dưới)
+- Người chơi nhập:
+  - Server: `<IP của máy host>` (ví dụ: `192.168.1.100`)
+  - Port: `8888`
+
+#### Bước 4: Build và Run
 1. Nhấn **Build** (Ctrl+B) hoặc nút búa 🔨
 2. Nhấn **Run** (Ctrl+R) hoặc nút play ▶️
 
@@ -265,6 +279,73 @@ cmake --build .
 
 ---
 
+## KẾT NỐI QUA MẠNG LAN
+
+### Chơi game với bạn bè trên cùng mạng LAN
+
+#### Người host server:
+
+**Bước 1: Tìm địa chỉ IP của máy**
+
+Trên Windows:
+```powershell
+ipconfig
+```
+Tìm dòng **IPv4 Address** (thường có dạng `192.168.x.x` hoặc `10.x.x.x`)
+
+Trên Linux/WSL:
+```bash
+hostname -I
+# HOẶC
+ip addr show
+```
+
+**Bước 2: Mở port 8888 trên firewall**
+
+Trên Windows (PowerShell với quyền Admin):
+```powershell
+New-NetFirewallRule -DisplayName "Math Puzzle Game Server" -Direction Inbound -LocalPort 8888 -Protocol TCP -Action Allow
+```
+
+Trên Linux:
+```bash
+sudo ufw allow 8888/tcp
+# HOẶC
+sudo iptables -A INPUT -p tcp --dport 8888 -j ACCEPT
+```
+
+**Bước 3: Chạy server như bình thường**
+```bash
+cd server
+./game_server
+```
+
+#### Người chơi (client):
+
+1. Mở client Qt
+2. Tại màn hình Login, nhập:
+   - **Server**: IP của máy host (ví dụ: `192.168.1.100`)
+   - **Port**: `8888`
+3. Nhấn **Connect**
+
+#### Test kết nối:
+
+Từ máy client, kiểm tra xem có kết nối được đến server không:
+
+**Windows (PowerShell):**
+```powershell
+Test-NetConnection -ComputerName 192.168.1.100 -Port 8888
+```
+
+**Linux:**
+```bash
+nc -zv 192.168.1.100 8888
+# HOẶC
+telnet 192.168.1.100 8888
+```
+
+---
+
 ## KIỂM TRA KẾT NỐI
 
 ### Test Server với netcat/telnet
@@ -379,6 +460,31 @@ Xem chi tiết trong file `PROTOCOL.md`.
 - Chat system với UI đẹp
 - Matrix cell selection UI
 - Timer với color indicators
+- **Hiển thị ping người chơi trong lobby** (mới!)
+- **UI game được tối ưu: phương trình lớn ở giữa, ma trận rõ ràng** (mới!)
+- **Cho phép người chơi thay đổi lựa chọn trước khi kết thúc** (mới!)
+
+---
+
+## CẢI TIẾN MỚI NHẤT
+
+### 1. Hiển thị Ping trong Lobby
+- Màn hình Room hiện tại có thêm cột **Ping**
+- Ping được hiển thị với mã màu:
+  - 🟢 Xanh lá: < 50ms (Tốt)
+  - 🟠 Cam: 50-100ms (Khá)
+  - 🔴 Đỏ: > 100ms (Kém)
+
+### 2. UI Game Screen được cải tiến
+- **Phương trình**: To hơn (28pt), ở giữa màn hình, có background xanh nổi bật
+- **Ma trận**: Kích thước cell tăng từ 55px → 70px, số to hơn (16pt), dễ nhìn hơn
+- **Chat**: Thu nhỏ lại (220-280px) để tập trung vào gameplay
+- **Timer**: Ở góc phải trên, đổi màu theo thời gian còn lại
+
+### 3. Resubmit (Thay đổi lựa chọn)
+- Người chơi có thể **submit lại nhiều lần**
+- Không bị khóa sau lần submit đầu tiên
+- Lựa chọn cuối cùng trước khi cả 4 người submit sẽ được tính
 
 ---
 

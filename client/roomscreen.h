@@ -17,7 +17,11 @@ public:
 private slots:
     void onReadyClicked();
     void onStartGameClicked();
+    void onLeaveRoomClicked();
     void onPlayerJoined(int index, const QString &username);
+    void onPlayerLeft(const QString &username);
+    void onPlayerDisconnected(const QString &username);
+    void onPlayerReconnected(const QString &username);
     void onRoomStatusUpdated(const QVector<PlayerInfo> &players);
     void onError(const QString &error);
 
@@ -29,6 +33,7 @@ private:
     QTableWidget *playerTable;
     QPushButton *readyButton;
     QPushButton *startGameButton;
+    QPushButton *leaveRoomButton;
     QLabel *statusLabel;
     
     void setupUI();

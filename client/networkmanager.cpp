@@ -1,5 +1,6 @@
 #include "networkmanager.h"
 #include <QDebug>
+#include <QRandomGenerator>
 
 NetworkManager::NetworkManager(QObject *parent)
     : QObject(parent)
@@ -91,6 +92,11 @@ void NetworkManager::sendCreateRoom(const QString &roomName)
 void NetworkManager::sendJoinRoom(int roomId)
 {
     sendCommand(QString("JOIN_ROOM|%1").arg(roomId));
+}
+
+void NetworkManager::sendLeaveRoom()
+{
+    sendCommand("LEAVE_ROOM");
 }
 
 void NetworkManager::sendReady()
@@ -203,11 +209,36 @@ void NetworkManager::handleMessage(const QString &message)
             emit roomJoined(currentRoomId);
         }
     }
+    else if (command == "LEFT_ROOM") {
+        currentRoomId = -1;
+        currentPlayerIndex = -1;
+        currentHostIndex = -1;
+        players.clear();
+        emit leftRoom();
+    }
     else if (command == "PLAYER_JOINED") {
         if (parts.size() >= 3) {
             int index = parts[1].toInt();
             QString username = parts[2];
             emit playerJoined(index, username);
+        }
+    }
+    else if (command == "PLAYER_LEFT") {
+        if (parts.size() >= 2) {
+            QString username = parts[1];
+            emit playerLeft(username);
+        }
+    }
+    else if (command == "PLAYER_DISCONNECTED") {
+        if (parts.size() >= 2) {
+            QString username = parts[1];
+            emit playerDisconnected(username);
+        }
+    }
+    else if (command == "PLAYER_RECONNECTED") {
+        if (parts.size() >= 2) {
+            QString username = parts[1];
+            emit playerReconnected(username);
         }
     }
     else if (command == "ROOM_STATUS") {
@@ -239,7 +270,14 @@ void NetworkManager::handleMessage(const QString &message)
     else if (command == "GAME_END") {
         if (parts.size() >= 3) {
             bool won = (parts[1] == "WIN");
-            QString msg = parts[2];
+            QString msg;
+            if (parts.size() >= 4) {
+                // Format: GAME_END|LOSE|reason|solution
+                msg = parts[2] + "|" + parts[3];
+            } else {
+                // Format: GAME_END|WIN|message
+                msg = parts[2];
+            }
             emit gameEnded(won, msg);
         }
     }
@@ -291,6 +329,14 @@ void NetworkManager::parseRoomStatus(const QStringList &parts)
                 player.ready = (playerParts[2] == "1");
                 player.isHost = (player.index == currentHostIndex);
                 
+                // Parse ping if available (format: idx:name:ready:ping)
+                if (playerParts.size() >= 4) {
+                    player.ping = playerParts[3].toInt();
+                } else {
+                    // No ping data available
+                    player.ping = -1;
+                }
+                
                 // Track current player's index
                 if (player.username == currentUsername) {
                     currentPlayerIndex = player.index;
@@ -306,7 +352,7 @@ void NetworkManager::parseRoomStatus(const QStringList &parts)
 
 void NetworkManager::parseGameStart(const QStringList &parts)
 {
-    // Format: GAME_START|equation|matrix0|matrix1|matrix2|matrix3
+    // Format: GAME_START|equation|matrix0|matrix1|matrix2|matrix3|currentRound|totalRounds
     // equation: P1+P2*P3=P4
     // matrix: 16 numbers separated by commas, or HIDDEN
     
@@ -316,6 +362,15 @@ void NetworkManager::parseGameStart(const QStringList &parts)
     }
     
     gameData.equation = parts[1];
+    
+    // Parse round info if available (backward compatibility)
+    if (parts.size() >= 8) {
+        gameData.currentRound = parts[6].toInt();
+        gameData.totalRounds = parts[7].toInt();
+    } else {
+        gameData.currentRound = 1;
+        gameData.totalRounds = 5;
+    }
     
     // Parse 4 matrices
     for (int m = 0; m < 4; m++) {

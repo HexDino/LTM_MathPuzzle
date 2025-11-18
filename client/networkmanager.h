@@ -18,12 +18,15 @@ struct PlayerInfo {
     QString username;
     bool ready;
     bool isHost;
+    int ping;  // Ping in milliseconds
 };
 
 struct GameData {
     QString equation;
     QVector<QVector<int>> matrices[4];  // 4 matrices, each 4x4
     bool matrixHidden[4];               // Which matrix is hidden
+    int currentRound = 1;
+    int totalRounds = 5;
 };
 
 class NetworkManager : public QObject
@@ -45,6 +48,7 @@ public:
     void sendListRooms();
     void sendCreateRoom(const QString &roomName);
     void sendJoinRoom(int roomId);
+    void sendLeaveRoom();
     void sendReady();
     void sendStartGame();
     void sendChat(const QString &message);
@@ -80,7 +84,11 @@ signals:
     // Room signals
     void roomCreated(int roomId, const QString &roomName);
     void roomJoined(int roomId);
+    void leftRoom();
     void playerJoined(int index, const QString &username);
+    void playerLeft(const QString &username);
+    void playerDisconnected(const QString &username);  // Temporary disconnect
+    void playerReconnected(const QString &username);   // Reconnected successfully
     void roomStatusUpdated(const QVector<PlayerInfo> &players);
     
     // Game signals

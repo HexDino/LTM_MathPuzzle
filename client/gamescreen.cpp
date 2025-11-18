@@ -42,12 +42,12 @@ void MatrixWidget::setupUI()
     
     // Make cells square and remove extra spacing
     for (int i = 0; i < 4; i++) {
-        table->setColumnWidth(i, 55);
-        table->setRowHeight(i, 55);
+        table->setColumnWidth(i, 50);
+        table->setRowHeight(i, 50);
     }
     
-    // Set exact size to fit 4x4 cells (55*4 = 220 + borders)
-    int tableSize = 55 * 4 + 2;  // 4 cells + border
+    // Set exact size to fit 4x4 cells (50*4 = 200 + borders)
+    int tableSize = 50 * 4 + 2;  // 4 cells + border
     table->setMaximumSize(tableSize, tableSize);
     table->setMinimumSize(tableSize, tableSize);
     table->setFixedSize(tableSize, tableSize);
@@ -65,10 +65,21 @@ void MatrixWidget::setMatrix(const QVector<QVector<int>> &data)
     for (int i = 0; i < 4; i++) {
         if (data[i].size() != 4) continue;
         for (int j = 0; j < 4; j++) {
-            QTableWidgetItem *item = new QTableWidgetItem(QString::number(data[i][j]));
+            QString numStr = QString::number(data[i][j]);
+            QTableWidgetItem *item = new QTableWidgetItem(numStr);
             item->setTextAlignment(Qt::AlignCenter);
+            
             QFont font = item->font();
-            font.setPointSize(14);
+            int numLength = numStr.length();
+            if (numLength <= 4) {
+                font.setPointSize(12);  
+            } else if (numLength == 5) {
+                font.setPointSize(10);  
+            } else if (numLength == 6) {
+                font.setPointSize(8);  
+            } else {
+                font.setPointSize(7);  
+            }
             font.setBold(true);
             item->setFont(font);
             table->setItem(i, j, item);
@@ -87,7 +98,7 @@ void MatrixWidget::setHidden()
             item->setTextAlignment(Qt::AlignCenter);
             item->setBackground(Qt::lightGray);
             QFont font = item->font();
-            font.setPointSize(20);
+            font.setPointSize(18);  // Smaller font for 50px cells
             font.setBold(true);
             item->setFont(font);
             table->setItem(i, j, item);
@@ -136,38 +147,48 @@ GameScreen::GameScreen(NetworkManager *network, QWidget *parent)
 void GameScreen::setupUI()
 {
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
+    mainLayout->setContentsMargins(10, 10, 10, 10);  // Reduce margins to save space
+    mainLayout->setSpacing(5);  // Reduce default spacing
     
-    // Top bar: Equation and Timer
-    QHBoxLayout *topLayout = new QHBoxLayout();
+    // Timer and Round info on same line
+    QHBoxLayout *topInfoLayout = new QHBoxLayout();
     
-    equationLabel = new QLabel("Equation: ", this);
-    QFont eqFont = equationLabel->font();
-    eqFont.setPointSize(18);
-    eqFont.setBold(true);
-    equationLabel->setFont(eqFont);
+    // Round info (left)
+    roundLabel = new QLabel("Round 1/5", this);
+    QFont roundFont = roundLabel->font();
+    roundFont.setPointSize(13);
+    roundFont.setBold(true);
+    roundLabel->setFont(roundFont);
+    roundLabel->setStyleSheet("QLabel { color: #FF9800; }");
+    topInfoLayout->addWidget(roundLabel);
     
+    topInfoLayout->addStretch();
+    
+    // Timer (right)
     timerLabel = new QLabel("Time: 3:00", this);
     QFont timerFont = timerLabel->font();
-    timerFont.setPointSize(18);
+    timerFont.setPointSize(14);
     timerFont.setBold(true);
     timerLabel->setFont(timerFont);
     timerLabel->setStyleSheet("QLabel { color: green; }");
+    topInfoLayout->addWidget(timerLabel);
     
-    topLayout->addWidget(equationLabel);
-    topLayout->addStretch();
-    topLayout->addWidget(timerLabel);
+    mainLayout->addLayout(topInfoLayout);
+    mainLayout->addSpacing(5);
     
-    mainLayout->addLayout(topLayout);
+    // Equation (center, compact)
+    equationLabel = new QLabel("Equation: ", this);
+    QFont eqFont = equationLabel->font();
+    eqFont.setPointSize(22);  // Reduced from 28 to 22
+    eqFont.setBold(true);
+    equationLabel->setFont(eqFont);
+    equationLabel->setAlignment(Qt::AlignCenter);
+    equationLabel->setStyleSheet("QLabel { color: #2196F3; background-color: #E3F2FD; padding: 8px 15px; border-radius: 6px; }");
+    equationLabel->setMaximumHeight(60);  // Limit height to save space
+    mainLayout->addWidget(equationLabel);
     
-    // Instructions
-    instructionLabel = new QLabel(
-        "Work together! Share your matrix values via chat. Select a cell from YOUR matrix and submit!",
-        this);
-    instructionLabel->setWordWrap(true);
-    instructionLabel->setAlignment(Qt::AlignCenter);
-    mainLayout->addWidget(instructionLabel);
+    mainLayout->addSpacing(8);
     
-    mainLayout->addSpacing(10);
     
     // Main content: Matrices and Chat side by side
     QHBoxLayout *contentLayout = new QHBoxLayout();
@@ -175,8 +196,8 @@ void GameScreen::setupUI()
     // Left: 4 Matrices in 2x2 grid
     QGroupBox *matricesGroup = new QGroupBox("Matrices", this);
     QGridLayout *matricesLayout = new QGridLayout(matricesGroup);
-    matricesLayout->setSpacing(10);
-    matricesLayout->setContentsMargins(10, 10, 10, 10);
+    matricesLayout->setSpacing(8);  // Reduced from 10 to 8
+    matricesLayout->setContentsMargins(8, 8, 8, 8);  // Reduced from 10 to 8
     
     for (int i = 0; i < 4; i++) {
         matrixWidgets[i] = new MatrixWidget(i, this);
@@ -215,21 +236,24 @@ void GameScreen::setupUI()
     
     contentLayout->addWidget(chatGroup, 1);
     
-    mainLayout->addLayout(contentLayout);
+    mainLayout->addLayout(contentLayout, 1);  // Give content layout stretch factor
     
-    // Bottom: Submit section
+    mainLayout->addSpacing(5);
+    
+    // Bottom: Submit section (compact)
     statusLabel = new QLabel("Select a cell from YOUR matrix to submit!", this);
     statusLabel->setAlignment(Qt::AlignCenter);
     QFont statusFont = statusLabel->font();
-    statusFont.setPointSize(11);
+    statusFont.setPointSize(10);
     statusLabel->setFont(statusFont);
     mainLayout->addWidget(statusLabel);
     
     submitButton = new QPushButton("Submit Answer", this);
     submitButton->setEnabled(false);
-    submitButton->setMinimumHeight(50);
+    submitButton->setMinimumHeight(40);  // Reduced from 50 to 40
+    submitButton->setMaximumHeight(40);
     QFont submitFont = submitButton->font();
-    submitFont.setPointSize(14);
+    submitFont.setPointSize(12);  // Reduced from 14 to 12
     submitFont.setBold(true);
     submitButton->setFont(submitFont);
     submitButton->setStyleSheet("QPushButton:enabled { background-color: #4CAF50; color: white; }");
@@ -244,8 +268,11 @@ void GameScreen::setupUI()
 
 void GameScreen::onGameStarted(const GameData &data)
 {
-    // Update equation
-    equationLabel->setText("Equation: " + data.equation);
+    // Update round info
+    roundLabel->setText(QString("Round %1/%2").arg(data.currentRound).arg(data.totalRounds));
+    
+    // Update equation (center, no "Equation:" prefix)
+    equationLabel->setText(data.equation);
     
     // Update matrices
     for (int i = 0; i < 4; i++) {
@@ -259,7 +286,8 @@ void GameScreen::onGameStarted(const GameData &data)
     
     // Clear chat
     chatDisplay->clear();
-    chatDisplay->append("<b>Game started! Work together to solve the puzzle!</b>");
+    chatDisplay->append(QString("<b>Round %1/%2 started! Work together to solve the puzzle!</b>")
+                        .arg(data.currentRound).arg(data.totalRounds));
     
     // Reset status
     statusLabel->setText(QString("Select a cell from Matrix P%1 (YOUR matrix) to submit!").arg(selectedMatrixIndex + 1));
@@ -320,15 +348,15 @@ void GameScreen::onSubmitClicked()
     int row = widget->getSelectedRow();
     int col = widget->getSelectedCol();
     
-    // Confirm submission
+    // Confirm submission (with option to change)
     QMessageBox::StandardButton reply = QMessageBox::question(this, "Confirm Submission",
-        QString("Submit cell [%1, %2] from your matrix?\n\nYou cannot change after submission!").arg(row).arg(col),
+        QString("Submit cell [%1, %2] from your matrix?\n\nYou can change your answer anytime before all players submit.").arg(row).arg(col),
         QMessageBox::Yes | QMessageBox::No);
     
     if (reply == QMessageBox::Yes) {
         networkManager->sendSubmit(row, col);
-        submitButton->setEnabled(false);
-        statusLabel->setText("Answer submitted! Waiting for other players...");
+        // Keep submit button enabled so player can change their answer
+        statusLabel->setText(QString("Answer submitted: Cell [%1, %2]. You can still change your selection!").arg(row).arg(col));
     }
 }
 

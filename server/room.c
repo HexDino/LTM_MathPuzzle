@@ -140,6 +140,72 @@ void handle_join_room(Server *server, int client_idx, int room_id) {
     }
 }
 
+// Handle leave room request
+void handle_leave_room(Server *server, int client_idx) {
+    Client *client = &server->clients[client_idx];
+    
+    if (client->room_id < 0) {
+        client_send(client, "ERROR|Not in a room\n");
+        return;
+    }
+    
+    int room_id = client->room_id;
+    Room *room = &server->rooms[room_id];
+    
+    // Notify other players
+    char msg[256];
+    snprintf(msg, sizeof(msg), "PLAYER_LEFT|%s\n", client->username);
+    room_broadcast(server, room_id, msg, client_idx);
+    
+    // If game in progress, abort it
+    if (room->game_started) {
+        room_broadcast(server, room_id, "GAME_ABORTED|Player left the room\n", -1);
+    }
+    
+    // Remove player from room
+    for (int i = 0; i < PLAYERS_PER_ROOM; i++) {
+        if (room->player_ids[i] == client_idx) {
+            room->player_ids[i] = -1;
+            room->player_ready[i] = 0;
+            
+            // If this was the host, assign new host
+            if (room->host_index == i && room->player_count > 1) {
+                // Find first available player as new host
+                for (int j = 0; j < PLAYERS_PER_ROOM; j++) {
+                    if (room->player_ids[j] >= 0 && j != i) {
+                        room->host_index = j;
+                        printf("New host for room %d: slot %d\n", room_id, j);
+                        break;
+                    }
+                }
+            }
+            break;
+        }
+    }
+    room->player_count--;
+    
+    // Clean up room if empty
+    if (room->player_count == 0) {
+        room_cleanup(server, room_id);
+    } else {
+        // Send updated room status to remaining players
+        send_room_status(server, room_id);
+    }
+    
+    // Set client back to lobby
+    client->room_id = -1;
+    client->player_index = -1;
+    client->state = STATE_IN_LOBBY;
+    
+    // Notify client they left
+    client_send(client, "LEFT_ROOM\n");
+    
+    // Send room list to client
+    send_room_list(server, client_idx);
+    
+    printf("Player %s left room %d\n", client->username, room_id);
+}
+
 // Handle ready request
 void handle_ready(Server *server, int client_idx) {
     Client *client = &server->clients[client_idx];
@@ -291,8 +357,17 @@ void send_room_status(Server *server, int room_id) {
         int client_idx = room->player_ids[i];
         if (client_idx >= 0) {
             Client *c = &server->clients[client_idx];
+            
+            // Calculate ping (RTT) in milliseconds
+            time_t now = time(NULL);
+            int ping_ms = (int)((now - c->last_pong_time) * 1000);
+            
+            // Cap ping at reasonable value
+            if (ping_ms > 9999) ping_ms = 9999;
+            if (ping_ms < 0) ping_ms = 0;
+            
             offset += snprintf(buffer + offset, BUFFER_SIZE - offset,
-                             "|%d:%s:%d", i, c->username, room->player_ready[i]);
+                             "|%d:%s:%d:%d", i, c->username, room->player_ready[i], ping_ms);
         }
     }
     
