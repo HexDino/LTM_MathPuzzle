@@ -4,12 +4,17 @@
 #include <QMenu>
 #include <QAction>
 #include <QMessageBox>
+#include <QIcon>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
+    , isReconnecting(false)
 {
     setWindowTitle("Math Puzzle Game - Multiplayer");
     resize(1000, 700);
+    
+    // Set window icon
+    setWindowIcon(QIcon(":/resources/logo.png"));
     
     // Initialize network manager
     networkManager = new NetworkManager(this);
@@ -93,14 +98,45 @@ void MainWindow::connectSignals()
     connect(networkManager, &NetworkManager::loginSuccessful, 
             stateMachine, &GameStateMachine::transitionToLobby);
     
+    // Handle reconnect separately - don't auto-transition, wait for server data
+    connect(networkManager, &NetworkManager::reconnectSuccessful, [this](const QString &username) {
+        qDebug() << "Reconnected as" << username << "- waiting for server data...";
+        isReconnecting = true;
+        // Server will send GAME_START, ROOM_STATUS, or ROOM_LIST
+        // which will trigger the appropriate screen transition
+    });
+    
     connect(networkManager, &NetworkManager::roomJoined, 
             stateMachine, &GameStateMachine::transitionToRoom);
     
     connect(networkManager, &NetworkManager::leftRoom, 
             stateMachine, &GameStateMachine::transitionToLobby);
     
-    connect(networkManager, &NetworkManager::gameStarted, 
-            stateMachine, &GameStateMachine::transitionToGame);
+    // Handle room status updates - if reconnecting, transition to room screen
+    connect(networkManager, &NetworkManager::roomStatusUpdated, [this]() {
+        if (isReconnecting) {
+            qDebug() << "Reconnected to room - transitioning to room screen";
+            isReconnecting = false;
+            stateMachine->transitionToRoom();
+        }
+    });
+    
+    // Handle room list - if reconnecting, transition to lobby screen
+    connect(networkManager, &NetworkManager::roomListReceived, [this]() {
+        if (isReconnecting) {
+            qDebug() << "Reconnected to lobby - transitioning to lobby screen";
+            isReconnecting = false;
+            stateMachine->transitionToLobby();
+        }
+    });
+    
+    connect(networkManager, &NetworkManager::gameStarted, [this]() {
+        if (isReconnecting) {
+            qDebug() << "Reconnected to game - transitioning to game screen";
+            isReconnecting = false;
+        }
+        stateMachine->transitionToGame();
+    });
     
     connect(networkManager, &NetworkManager::gameEnded, 
             stateMachine, &GameStateMachine::transitionToResult);
@@ -108,6 +144,15 @@ void MainWindow::connectSignals()
     connect(networkManager, &NetworkManager::gameAborted, [this](const QString &reason) {
         QMessageBox::warning(this, "Game Aborted", reason);
         stateMachine->transitionToLobby();
+    });
+    
+    // Handle server disconnect - go back to login screen
+    connect(networkManager, &NetworkManager::disconnected, [this]() {
+        QMessageBox::critical(this, "Connection Lost", 
+            "Lost connection to server!\n\n"
+            "The server may have stopped or you may have lost network connection.\n"
+            "Please reconnect to continue playing.");
+        stateMachine->transitionToLogin();
     });
     
     // Connect back to room button

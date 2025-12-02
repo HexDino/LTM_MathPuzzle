@@ -134,6 +134,26 @@ void NetworkManager::onConnected()
 void NetworkManager::onDisconnected()
 {
     qDebug() << "Disconnected from server";
+    
+    // Clear all state when disconnected
+    currentUsername.clear();
+    currentRoomId = -1;
+    currentHostIndex = -1;
+    currentPlayerIndex = -1;
+    rooms.clear();
+    players.clear();
+    timeRemaining = 0;
+    receiveBuffer.clear();
+    
+    // Clear game data
+    for (int i = 0; i < 4; i++) {
+        gameData.matrixHidden[i] = false;
+        gameData.matrices[i].clear();
+    }
+    gameData.equation.clear();
+    gameData.currentRound = 0;
+    gameData.totalRounds = 0;
+    
     emit disconnected();
 }
 
@@ -187,6 +207,15 @@ void NetworkManager::handleMessage(const QString &message)
         if (parts.size() > 1) {
             currentUsername = parts[1];
             emit loginSuccessful(currentUsername);
+        }
+    }
+    else if (command == "RECONNECT_OK") {
+        if (parts.size() > 1) {
+            currentUsername = parts[1];
+            emit reconnectSuccessful(currentUsername);
+            // Server will follow up with GAME_START if game is in progress
+            // or ROOM_STATUS if in room, or ROOM_LIST if in lobby
+            // Don't auto-transition to lobby - wait for server data
         }
     }
     else if (command == "REGISTER_OK") {

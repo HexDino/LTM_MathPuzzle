@@ -104,6 +104,7 @@ typedef struct {
     int player_index;  // 0-3 in room
     time_t last_pong_time;
     time_t last_ping_time;
+    int ping_ms;  // Stored RTT in milliseconds
     time_t disconnect_time;  // Time when client disconnected
     ClientState saved_state;  // State before disconnect
 } Client;

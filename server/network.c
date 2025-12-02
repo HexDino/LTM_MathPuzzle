@@ -3,7 +3,18 @@
 // Handle PONG response from client
 void handle_pong(Server *server, int client_idx) {
     Client *client = &server->clients[client_idx];
-    client->last_pong_time = time(NULL);
+    time_t now = time(NULL);
+    
+    // Calculate RTT (Round Trip Time) in milliseconds
+    int rtt = (int)((now - client->last_ping_time) * 1000);
+    
+    // Cap ping at reasonable value
+    if (rtt > 9999) rtt = 9999;
+    if (rtt < 0) rtt = 0;
+    
+    // Store the calculated ping
+    client->ping_ms = rtt;
+    client->last_pong_time = now;
 }
 
 // Send PING to all connected clients

@@ -32,6 +32,9 @@ private:
     GameScreen *gameScreen;
     ResultScreen *resultScreen;
     
+    // Reconnect state
+    bool isReconnecting;
+    
     void setupUI();
     void connectSignals();
 };

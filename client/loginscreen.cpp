@@ -16,6 +16,7 @@ LoginScreen::LoginScreen(NetworkManager *network, QWidget *parent)
     connect(networkManager, &NetworkManager::disconnected, this, &LoginScreen::onDisconnected);
     connect(networkManager, &NetworkManager::welcomeReceived, this, &LoginScreen::onWelcomeReceived);
     connect(networkManager, &NetworkManager::loginSuccessful, this, &LoginScreen::onLoginSuccessful);
+    connect(networkManager, &NetworkManager::reconnectSuccessful, this, &LoginScreen::onReconnectSuccessful);
     connect(networkManager, &NetworkManager::registerSuccessful, this, &LoginScreen::onRegisterSuccessful);
     connect(networkManager, &NetworkManager::connectionError, this, &LoginScreen::onError);
     connect(networkManager, &NetworkManager::errorReceived, this, &LoginScreen::onError);
@@ -27,6 +28,17 @@ void LoginScreen::setupUI()
 {
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
     mainLayout->setAlignment(Qt::AlignCenter);
+    
+    // Logo
+    logoLabel = new QLabel(this);
+    QPixmap logo(":/resources/logo.png");
+    if (!logo.isNull()) {
+        // Scale logo to reasonable size (300x300 max, keep aspect ratio)
+        logoLabel->setPixmap(logo.scaled(300, 300, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+        logoLabel->setAlignment(Qt::AlignCenter);
+        mainLayout->addWidget(logoLabel);
+        mainLayout->addSpacing(20);
+    }
     
     // Title
     QLabel *titleLabel = new QLabel("Math Puzzle Game", this);
@@ -178,6 +190,12 @@ void LoginScreen::onWelcomeReceived(const QString &message)
 void LoginScreen::onLoginSuccessful(const QString &username)
 {
     QMessageBox::information(this, "Success", "Logged in as " + username);
+}
+
+void LoginScreen::onReconnectSuccessful(const QString &username)
+{
+    QMessageBox::information(this, "Reconnected", 
+        "Welcome back, " + username + "!\n\nYou have been reconnected to your previous session.");
 }
 
 void LoginScreen::onRegisterSuccessful()

@@ -358,16 +358,9 @@ void send_room_status(Server *server, int room_id) {
         if (client_idx >= 0) {
             Client *c = &server->clients[client_idx];
             
-            // Calculate ping (RTT) in milliseconds
-            time_t now = time(NULL);
-            int ping_ms = (int)((now - c->last_pong_time) * 1000);
-            
-            // Cap ping at reasonable value
-            if (ping_ms > 9999) ping_ms = 9999;
-            if (ping_ms < 0) ping_ms = 0;
-            
+            // Use stored ping value (calculated when PONG is received)
             offset += snprintf(buffer + offset, BUFFER_SIZE - offset,
-                             "|%d:%s:%d:%d", i, c->username, room->player_ready[i], ping_ms);
+                             "|%d:%s:%d:%d", i, c->username, room->player_ready[i], c->ping_ms);
         }
     }
     

@@ -23,11 +23,15 @@ private slots:
     void onDisconnected();
     void onWelcomeReceived(const QString &message);
     void onLoginSuccessful(const QString &username);
+    void onReconnectSuccessful(const QString &username);
     void onRegisterSuccessful();
     void onError(const QString &error);
 
 private:
     NetworkManager *networkManager;
+    
+    // Logo
+    QLabel *logoLabel;
     
     // Connection UI
     QLineEdit *serverEdit;

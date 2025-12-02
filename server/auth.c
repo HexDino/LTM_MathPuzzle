@@ -145,9 +145,96 @@ void handle_login(Server *server, int client_idx, const char *username, const ch
         snprintf(response, sizeof(response), "RECONNECT_OK|%s\n", username);
         client_send(client, response);
         
-        // Send room status if in room
+        // Send appropriate data based on state
         if (old_room_id >= 0) {
-            send_room_status(server, old_room_id);
+            Room *room = &server->rooms[old_room_id];
+            
+            // If game is in progress, resend game data
+            if (old_state == STATE_IN_GAME && room->game_started) {
+                printf("Reconnecting player to active game...\n");
+                
+                // Send GAME_START with current puzzle (same as puzzle_send_to_clients but for one player)
+                Puzzle *puzzle = &room->puzzle;
+                char buffer[BUFFER_SIZE * 2];
+                int offset = 0;
+                
+                // Build equation string
+                char equation[128];
+                switch (puzzle->format) {
+                    case FORMAT_P1_P2_P3_EQ_P4:
+                        snprintf(equation, sizeof(equation), "P1%sP2%sP3=P4",
+                                get_operator_string(puzzle->op1),
+                                get_operator_string(puzzle->op2));
+                        break;
+                    case FORMAT_P1_EQ_P2_P3_P4:
+                        snprintf(equation, sizeof(equation), "P1=P2%sP3%sP4",
+                                get_operator_string(puzzle->op1),
+                                get_operator_string(puzzle->op2));
+                        break;
+                    case FORMAT_P1_P2_EQ_P3_P4:
+                        snprintf(equation, sizeof(equation), "P1%sP2=P3%sP4",
+                                get_operator_string(puzzle->op1),
+                                get_operator_string(puzzle->op2));
+                        break;
+                    default:
+                        snprintf(equation, sizeof(equation), "P1%sP2%sP3=P4",
+                                get_operator_string(puzzle->op1),
+                                get_operator_string(puzzle->op2));
+                }
+                
+                offset += snprintf(buffer + offset, sizeof(buffer) - offset,
+                                 "GAME_START|%s", equation);
+                
+                // Send all matrices except the player's own
+                for (int m = 0; m < PLAYERS_PER_ROOM; m++) {
+                    offset += snprintf(buffer + offset, sizeof(buffer) - offset, "|");
+                    
+                    if (m == old_player_index) {
+                        // Hide this player's matrix
+                        offset += snprintf(buffer + offset, sizeof(buffer) - offset, "HIDDEN");
+                    } else {
+                        // Send matrix data
+                        for (int i = 0; i < MATRIX_SIZE; i++) {
+                            for (int j = 0; j < MATRIX_SIZE; j++) {
+                                if (i == 0 && j == 0) {
+                                    offset += snprintf(buffer + offset, sizeof(buffer) - offset,
+                                                     "%d", puzzle->matrices[m].data[i][j]);
+                                } else {
+                                    offset += snprintf(buffer + offset, sizeof(buffer) - offset,
+                                                     ",%d", puzzle->matrices[m].data[i][j]);
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // Add round info
+                offset += snprintf(buffer + offset, sizeof(buffer) - offset, "|%d|%d\n",
+                                 room->current_round, room->total_rounds);
+                
+                client_send(client, buffer);
+                
+                // Send current timer
+                char timer_msg[64];
+                snprintf(timer_msg, sizeof(timer_msg), "TIMER|%d\n", room->game_time_remaining);
+                client_send(client, timer_msg);
+                
+                // Send submission status for all players
+                for (int i = 0; i < PLAYERS_PER_ROOM; i++) {
+                    if (room->answer_submitted[i]) {
+                        int player_client_idx = room->player_ids[i];
+                        if (player_client_idx >= 0) {
+                            char submit_msg[128];
+                            snprintf(submit_msg, sizeof(submit_msg), "PLAYER_SUBMITTED|%d|%s\n",
+                                   i, server->clients[player_client_idx].username);
+                            client_send(client, submit_msg);
+                        }
+                    }
+                }
+            } else {
+                // Just send room status if not in game
+                send_room_status(server, old_room_id);
+            }
         } else {
             send_room_list(server, client_idx);
         }

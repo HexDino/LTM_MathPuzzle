@@ -75,6 +75,7 @@ signals:
     // Authentication signals
     void welcomeReceived(const QString &message);
     void loginSuccessful(const QString &username);
+    void reconnectSuccessful(const QString &username);  // For reconnect after disconnect
     void registerSuccessful();
     void authError(const QString &error);
     
