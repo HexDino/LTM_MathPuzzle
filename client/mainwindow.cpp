@@ -62,11 +62,14 @@ void MainWindow::setupUI()
     QAction *aboutAction = helpMenu->addAction("&About");
     connect(aboutAction, &QAction::triggered, [this]() {
         QMessageBox::about(this, "About Math Puzzle Game",
-            "Math Puzzle Game - Multiplayer\n\n"
-            "A cooperative 4-player puzzle game with asymmetric information.\n"
-            "Work together to solve math equations!\n\n"
-            "Version 1.0\n"
-            "Network Programming Project");
+                           "Math Puzzle Game - Multiplayer\n\n"
+                           "A cooperative 4-player puzzle game with asymmetric information.\n"
+                           "Work together to solve math equations!\n\n"
+                           "Version 2.0\n"
+                           "Network Programming Project\n\n"
+                           "By HUST's Students:\n"
+                           "HungNT - 20225633\n"
+                           "NamNK - 20225749\n"              );
     });
 }
 

@@ -4,7 +4,8 @@
 
 NetworkManager::NetworkManager(QObject *parent)
     : QObject(parent)
-    , socket(new QTcpSocket(this))
+    // , socket(new QTcpSocket(this))
+    , socket(new BSDSocketClient(this))
     , currentRoomId(-1)
     , currentHostIndex(-1)
     , currentPlayerIndex(-1)
@@ -16,17 +17,25 @@ NetworkManager::NetworkManager(QObject *parent)
     }
     
     // Connect socket signals
-    connect(socket, &QTcpSocket::connected, this, &NetworkManager::onConnected);
-    connect(socket, &QTcpSocket::disconnected, this, &NetworkManager::onDisconnected);
-    connect(socket, &QTcpSocket::readyRead, this, &NetworkManager::onReadyRead);
+    // connect(socket, &QTcpSocket::connected, this, &NetworkManager::onConnected);
+    // connect(socket, &QTcpSocket::disconnected, this, &NetworkManager::onDisconnected);
+    // connect(socket, &QTcpSocket::readyRead, this, &NetworkManager::onReadyRead);
     
+    // Connect socket signals (THAY ĐỔI)
+    connect(socket, &BSDSocketClient::connected, this, &NetworkManager::onConnected);
+    connect(socket, &BSDSocketClient::disconnected, this, &NetworkManager::onDisconnected);
+
+    // Quan trọng: Signal mới mang theo dữ liệu
+    connect(socket, &BSDSocketClient::dataReceived, this, &NetworkManager::onDataReceived);
+
+
     // Qt 5.15+ and Qt 6 use errorOccurred, older Qt 5 uses error
-#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
-    connect(socket, &QAbstractSocket::errorOccurred, this, &NetworkManager::onError);
-#else
-    connect(socket, static_cast<void(QAbstractSocket::*)(QAbstractSocket::SocketError)>(&QAbstractSocket::error),
-            this, &NetworkManager::onError);
-#endif
+// #if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+//     connect(socket, &QAbstractSocket::errorOccurred, this, &NetworkManager::onError);
+// #else
+//     connect(socket, static_cast<void(QAbstractSocket::*)(QAbstractSocket::SocketError)>(&QAbstractSocket::error),
+//             this, &NetworkManager::onError);
+// #endif
 }
 
 NetworkManager::~NetworkManager()
@@ -37,19 +46,24 @@ NetworkManager::~NetworkManager()
 void NetworkManager::connectToServer(const QString &host, quint16 port)
 {
     qDebug() << "Connecting to" << host << ":" << port;
-    socket->connectToHost(host, port);
+    // socket->connectToHost(host, port);
+    socket->connectServer(host, port);
 }
 
 void NetworkManager::disconnectFromServer()
 {
-    if (socket->state() == QAbstractSocket::ConnectedState) {
-        socket->disconnectFromHost();
-    }
+    // if (socket->state() == QAbstractSocket::ConnectedState) {
+    //     socket->disconnectFromHost();
+    // }
+
+    socket->closeConnection();
+
 }
 
 bool NetworkManager::isConnected() const
 {
-    return socket->state() == QAbstractSocket::ConnectedState;
+    // return socket->state() == QAbstractSocket::ConnectedState;
+    return m_isConnected;
 }
 
 void NetworkManager::sendCommand(const QString &command)
@@ -64,9 +78,11 @@ void NetworkManager::sendCommand(const QString &command)
         message += '\n';
     }
     
-    qDebug() << "→ " << command;
-    socket->write(message.toUtf8());
-    socket->flush();
+    qDebug() << "[SEND] → " << command;
+    // socket->write(message.toUtf8());
+    // socket->flush();
+
+    socket->sendData(message.toUtf8());
 }
 
 void NetworkManager::sendRegister(const QString &username, const QString &password)
@@ -127,6 +143,7 @@ void NetworkManager::sendPong()
 void NetworkManager::onConnected()
 {
     qDebug() << "Connected to server";
+    m_isConnected = true;
     receiveBuffer.clear();
     emit connected();
 }
@@ -134,7 +151,8 @@ void NetworkManager::onConnected()
 void NetworkManager::onDisconnected()
 {
     qDebug() << "Disconnected from server";
-    
+    m_isConnected = false;
+
     // Clear all state when disconnected
     currentUsername.clear();
     currentRoomId = -1;
@@ -157,31 +175,53 @@ void NetworkManager::onDisconnected()
     emit disconnected();
 }
 
-void NetworkManager::onReadyRead()
-{
-    // Read all available data
-    QByteArray data = socket->readAll();
-    receiveBuffer += QString::fromUtf8(data);
+// void NetworkManager::onReadyRead()
+// {
+//     // Read all available data
+//     QByteArray data = socket->readAll();
+//     receiveBuffer += QString::fromUtf8(data);
     
-    // Process complete messages (delimited by \n)
+//     // Process complete messages (delimited by \n)
+//     while (receiveBuffer.contains('\n')) {
+//         int newlinePos = receiveBuffer.indexOf('\n');
+//         QString message = receiveBuffer.left(newlinePos).trimmed();
+//         receiveBuffer = receiveBuffer.mid(newlinePos + 1);
+        
+//         if (!message.isEmpty()) {
+//             qDebug() << "← " << message;
+//             handleMessage(message);
+//         }
+//     }
+// }
+
+
+// Đổi tên hàm từ onReadyRead -> onDataReceived
+void NetworkManager::onDataReceived(QByteArray data)
+{
+    // Không cần gọi socket->readAll() nữa vì 'data' đã được truyền vào
+
+    receiveBuffer += QString::fromUtf8(data);
+
+    // Logic tách dòng giữ nguyên hoàn toàn
     while (receiveBuffer.contains('\n')) {
         int newlinePos = receiveBuffer.indexOf('\n');
         QString message = receiveBuffer.left(newlinePos).trimmed();
         receiveBuffer = receiveBuffer.mid(newlinePos + 1);
-        
+
         if (!message.isEmpty()) {
-            qDebug() << "← " << message;
+            qDebug() << "[RECEIVE] ← " << message;
             handleMessage(message);
         }
     }
 }
 
-void NetworkManager::onError(QAbstractSocket::SocketError socketError)
-{
-    QString errorMsg = socket->errorString();
-    qWarning() << "Socket error:" << socketError << "-" << errorMsg;
-    emit connectionError(errorMsg);
-}
+
+// void NetworkManager::onError(QAbstractSocket::SocketError socketError)
+// {
+//     QString errorMsg = socket->errorString();
+//     qWarning() << "Socket error:" << socketError << "-" << errorMsg;
+//     emit connectionError(errorMsg);
+// }
 
 void NetworkManager::handleMessage(const QString &message)
 {
