@@ -181,7 +181,7 @@ int client_accept(Server *server) {
            inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port),
            new_socket, client_idx);
     
-    client_send(client, "WELCOME|Math Puzzle Game Server v1.0\n");
+    client_send(client, "WELCOME|Math Puzzle Game Server v2.0\n");
     
     return client_idx;
 }

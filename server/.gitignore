@@ -15,3 +15,6 @@ users.txt
 # Logs
 *.log
 
+#User data
+users.txt
+

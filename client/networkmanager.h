@@ -2,7 +2,8 @@
 #define NETWORKMANAGER_H
 
 #include <QObject>
-#include <QTcpSocket>
+// #include <QTcpSocket>
+#include <bsdsocketclient.h>
 #include <QString>
 #include <QStringList>
 
@@ -66,6 +67,7 @@ public:
     const GameData& getGameData() const { return gameData; }
     int getTimeRemaining() const { return timeRemaining; }
 
+
 signals:
     // Connection signals
     void connected();
@@ -109,12 +111,19 @@ signals:
 private slots:
     void onConnected();
     void onDisconnected();
-    void onReadyRead();
-    void onError(QAbstractSocket::SocketError socketError);
+    // void onReadyRead();
+    void onDataReceived(QByteArray data);
+
+    // void onError(QAbstractSocket::SocketError socketError);
 
 private:
-    QTcpSocket *socket;
+    // QTcpSocket *socket;
+    BSDSocketClient *socket;
     QString receiveBuffer;
+
+    //Connection State
+    bool m_isConnected;
+
     
     // Current state
     QString currentUsername;
