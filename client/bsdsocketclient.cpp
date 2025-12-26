@@ -22,7 +22,7 @@ BSDSocketClient::~BSDSocketClient()
 #endif
 }
 
-void BSDSocketClient::setNonBlocking(int fd)
+void BSDSocketClient::setNonBlocking(SOCKET fd)
 {
 #ifdef _WIN32
     // Cách set Non-blocking trên Windows
