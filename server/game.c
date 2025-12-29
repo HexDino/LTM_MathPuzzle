@@ -1,5 +1,14 @@
 #include "server.h"
 
+// Helper function to generate random number in range, excluding 0
+int rand_non_zero(int min_val, int max_val) {
+    int value;
+    do {
+        value = (rand() % (max_val - min_val + 1)) + min_val;
+    } while (value == 0);
+    return value;
+}
+
 // Get operator string
 char* get_operator_string(Operator op) {
     switch (op) {
@@ -26,24 +35,32 @@ int apply_operator(int a, Operator op, int b) {
 // Format: P1 op1 P2 op2 P3 = result
 // Example: P1 - P2 * P3 = result (with proper precedence)
 int calculate_result(int p1, Operator op1, int p2, Operator op2, int p3) {
-    // Handle operator precedence
-    // If op2 is multiplication, do it first
-    if (op2 == OP_MUL) {
-        int temp = p2 * p3;
+    // Handle operator precedence: MUL and DIV have higher precedence
+    if (op2 == OP_MUL || op2 == OP_DIV) {
+        // Do op2 first (higher precedence)
+        int temp = (op2 == OP_MUL) ? (p2 * p3) : ((p3 != 0) ? (p2 / p3) : p2);
+        
+        // Then apply op1
         if (op1 == OP_ADD) return p1 + temp;
         else if (op1 == OP_SUB) return p1 - temp;
-        else return p1 * temp;
+        else if (op1 == OP_MUL) return p1 * temp;
+        else if (op1 == OP_DIV) return (temp != 0) ? (p1 / temp) : p1;
+        else return p1 + temp;
     }
     
-    // Otherwise, left to right
+    // Otherwise, left to right evaluation
     int temp;
     if (op1 == OP_ADD) temp = p1 + p2;
     else if (op1 == OP_SUB) temp = p1 - p2;
-    else temp = p1 * p2;
+    else if (op1 == OP_MUL) temp = p1 * p2;
+    else if (op1 == OP_DIV) temp = (p2 != 0) ? (p1 / p2) : p1;
+    else temp = p1 + p2;
     
     if (op2 == OP_ADD) return temp + p3;
     else if (op2 == OP_SUB) return temp - p3;
-    else return temp * p3;
+    else if (op2 == OP_MUL) return temp * p3;
+    else if (op2 == OP_DIV) return (p3 != 0) ? (temp / p3) : temp;
+    else return temp + p3;
 }
 
 // Generate random puzzle based on round difficulty
@@ -83,10 +100,10 @@ void puzzle_generate(Puzzle *puzzle, int round) {
             min_val = 2; max_val = 40;
             break;
             
-        case 5: // Expert: All operations + negative numbers, format P1 * P2 ± P3 = P4
+        case 5: // Expert: All operations including division, format P1 op1 P2 op2 P3 = P4
             puzzle->format = FORMAT_P1_P2_P3_EQ_P4;
-            puzzle->op1 = (rand() % 2) ? OP_MUL : OP_DIV;
-            puzzle->op2 = rand() % 3;
+            puzzle->op1 = (rand() % 2) ? OP_MUL : OP_DIV;  // MUL or DIV
+            puzzle->op2 = rand() % 4;  // ADD, SUB, MUL, or DIV (0-3)
             min_val = -20; max_val = 50;
             allow_negative = 1;
             break;
@@ -101,24 +118,24 @@ void puzzle_generate(Puzzle *puzzle, int round) {
     // Generate values based on equation format
     switch (puzzle->format) {
         case FORMAT_P1_P2_P3_EQ_P4: // P1 op1 P2 op2 P3 = P4
-            p1 = (rand() % (max_val - min_val + 1)) + min_val;
-            p2 = (rand() % (max_val - min_val + 1)) + min_val;
-            p3 = (rand() % (max_val - min_val + 1)) + min_val;
+            p1 = rand_non_zero(min_val, max_val);
+            p2 = rand_non_zero(min_val, max_val);
+            p3 = rand_non_zero(min_val, max_val);
             // Use calculate_result to handle operator precedence correctly
             p4 = calculate_result(p1, puzzle->op1, p2, puzzle->op2, p3);
             break;
             
         case FORMAT_P1_EQ_P2_P3_P4: // P1 = P2 op1 P3 op2 P4
-            p2 = (rand() % (max_val - min_val + 1)) + min_val;
-            p3 = (rand() % (max_val - min_val + 1)) + min_val;
-            p4 = (rand() % (max_val - min_val + 1)) + min_val;
+            p2 = rand_non_zero(min_val, max_val);
+            p3 = rand_non_zero(min_val, max_val);
+            p4 = rand_non_zero(min_val, max_val);
             // Use calculate_result to handle operator precedence correctly
             p1 = calculate_result(p2, puzzle->op1, p3, puzzle->op2, p4);
             break;
             
         case FORMAT_P1_P2_EQ_P3_P4: // P1 op1 P2 = P3 op2 P4
-            p3 = (rand() % (max_val - min_val + 1)) + min_val;
-            p4 = (rand() % (max_val - min_val + 1)) + min_val;
+            p3 = rand_non_zero(min_val, max_val);
+            p4 = rand_non_zero(min_val, max_val);
             
             // Calculate right side: P3 op2 P4
             int right_side = apply_operator(p3, puzzle->op2, p4);
@@ -126,11 +143,11 @@ void puzzle_generate(Puzzle *puzzle, int round) {
             // Generate P1 and P2 to ensure equation has integer solution
             if (puzzle->op1 == OP_ADD) {
                 // P1 + P2 = right_side
-                p1 = (rand() % (max_val - min_val + 1)) + min_val;
+                p1 = rand_non_zero(min_val, max_val);
                 p2 = right_side - p1;  // P2 = right_side - P1
             } else if (puzzle->op1 == OP_SUB) {
                 // P1 - P2 = right_side => P2 = P1 - right_side
-                p1 = (rand() % (max_val - min_val + 1)) + min_val;
+                p1 = rand_non_zero(min_val, max_val);
                 p2 = p1 - right_side;
             } else if (puzzle->op1 == OP_MUL) {
                 // P1 * P2 = right_side
@@ -154,21 +171,25 @@ void puzzle_generate(Puzzle *puzzle, int round) {
                         p1 = divisors[rand() % div_count];
                         p2 = right_side / p1;
                     } else {
-                        // Fallback: just pick random and accept integer division error
-                        p1 = (rand() % (max_val - min_val + 1)) + min_val;
-                        if (p1 == 0) p1 = 1;
+                        // Fallback: just pick random (non-zero)
+                        p1 = rand_non_zero(min_val, max_val);
                         p2 = right_side / p1;
                     }
                 }
             } else { // OP_DIV
                 // P1 / P2 = right_side => P1 = right_side * P2
                 // Generate P2 first, then calculate P1
-                p2 = (rand() % (max_val - min_val + 1)) + min_val;
-                if (p2 == 0) p2 = 1;
+                p2 = rand_non_zero(min_val, max_val);
                 p1 = right_side * p2;  // This ensures P1 / P2 = right_side exactly
             }
             break;
     }
+    
+    // Ensure no solution value is 0 (adjust if needed)
+    if (p1 == 0) p1 = 1;
+    if (p2 == 0) p2 = 1;
+    if (p3 == 0) p3 = 1;
+    if (p4 == 0) p4 = 1;
     
     // Store solution values
     puzzle->solution_values[0] = p1;
@@ -177,21 +198,21 @@ void puzzle_generate(Puzzle *puzzle, int round) {
     puzzle->solution_values[3] = p4;
     puzzle->result = (puzzle->format == FORMAT_P1_EQ_P2_P3_P4) ? p1 : p4;
     
-    // Generate matrices with UNIQUE random numbers (no duplicates)
+    // Generate matrices with UNIQUE random numbers (no duplicates, no zero)
     for (int m = 0; m < PLAYERS_PER_ROOM; m++) {
         int solution_value = puzzle->solution_values[m];
         int available_numbers[1000];  // Pool of available numbers
         int pool_size = 0;
         
-        // Create pool of numbers (excluding the solution value to avoid duplicates initially)
+        // Create pool of numbers (excluding the solution value and zero to avoid duplicates)
         if (allow_negative) {
             for (int n = min_val; n <= max_val; n++) {
-                if (n != solution_value) {
+                if (n != solution_value && n != 0) {  // Exclude 0
                     available_numbers[pool_size++] = n;
                 }
             }
         } else {
-            for (int n = 1; n <= max_val; n++) {
+            for (int n = 1; n <= max_val; n++) {  // Already starts from 1, no 0
                 if (n != solution_value) {
                     available_numbers[pool_size++] = n;
                 }
