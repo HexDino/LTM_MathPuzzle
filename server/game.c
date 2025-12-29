@@ -118,17 +118,53 @@ void puzzle_generate(Puzzle *puzzle, int round) {
     // Generate values based on equation format
     switch (puzzle->format) {
         case FORMAT_P1_P2_P3_EQ_P4: // P1 op1 P2 op2 P3 = P4
-            p1 = rand_non_zero(min_val, max_val);
-            p2 = rand_non_zero(min_val, max_val);
-            p3 = rand_non_zero(min_val, max_val);
+            // For division, need to ensure integer results
+            if (puzzle->op1 == OP_DIV) {
+                // P1 / P2 op2 P3 = P4
+                // Generate P2 and make P1 a multiple of P2
+                p2 = rand_non_zero(min_val, max_val);
+                int quotient = rand_non_zero(min_val, max_val);
+                p1 = quotient * p2;  // Ensures P1 / P2 = quotient (exact)
+                p3 = rand_non_zero(min_val, max_val);
+            } else if (puzzle->op2 == OP_DIV) {
+                // P1 op1 P2 / P3 = P4
+                // Generate P3 and make P2 a multiple of P3
+                p1 = rand_non_zero(min_val, max_val);
+                p3 = rand_non_zero(min_val, max_val);
+                int quotient = rand_non_zero(min_val, max_val);
+                p2 = quotient * p3;  // Ensures P2 / P3 = quotient (exact)
+            } else {
+                // No division, can use simple random
+                p1 = rand_non_zero(min_val, max_val);
+                p2 = rand_non_zero(min_val, max_val);
+                p3 = rand_non_zero(min_val, max_val);
+            }
             // Use calculate_result to handle operator precedence correctly
             p4 = calculate_result(p1, puzzle->op1, p2, puzzle->op2, p3);
             break;
             
         case FORMAT_P1_EQ_P2_P3_P4: // P1 = P2 op1 P3 op2 P4
-            p2 = rand_non_zero(min_val, max_val);
-            p3 = rand_non_zero(min_val, max_val);
-            p4 = rand_non_zero(min_val, max_val);
+            // For division, need to ensure integer results
+            if (puzzle->op1 == OP_DIV) {
+                // P1 = P2 / P3 op2 P4
+                // Generate P3 and make P2 a multiple of P3
+                p3 = rand_non_zero(min_val, max_val);
+                int quotient = rand_non_zero(min_val, max_val);
+                p2 = quotient * p3;  // Ensures P2 / P3 = quotient (exact)
+                p4 = rand_non_zero(min_val, max_val);
+            } else if (puzzle->op2 == OP_DIV) {
+                // P1 = P2 op1 P3 / P4
+                // Generate P4 and make P3 a multiple of P4
+                p2 = rand_non_zero(min_val, max_val);
+                p4 = rand_non_zero(min_val, max_val);
+                int quotient = rand_non_zero(min_val, max_val);
+                p3 = quotient * p4;  // Ensures P3 / P4 = quotient (exact)
+            } else {
+                // No division, can use simple random
+                p2 = rand_non_zero(min_val, max_val);
+                p3 = rand_non_zero(min_val, max_val);
+                p4 = rand_non_zero(min_val, max_val);
+            }
             // Use calculate_result to handle operator precedence correctly
             p1 = calculate_result(p2, puzzle->op1, p3, puzzle->op2, p4);
             break;
