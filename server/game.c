@@ -283,9 +283,11 @@ void room_start_game(Server *server, int room_id) {
     room->game_start_time = time(NULL);
     room->game_time_remaining = GAME_DURATION;
     room->all_submitted = 0;
+    room->waiting_for_continue = 0;  // Reset waiting state when starting new round
     
     for (int i = 0; i < PLAYERS_PER_ROOM; i++) {
         room->answer_submitted[i] = 0;
+        room->round_continue_ready[i] = 0;  // Reset continue ready flags
         int client_idx = room->player_ids[i];
         if (client_idx >= 0) {
             server->clients[client_idx].state = STATE_IN_GAME;
@@ -430,7 +432,7 @@ void handle_submit(Server *server, int client_idx, int row, int col) {
     snprintf(msg, sizeof(msg), "PLAYER_SUBMITTED|%d|%s\n", player_idx, client->username);
     room_broadcast(server, room_id, msg, -1);
     
-    // Check if all players have submitted
+    // Check if all players have submitted (and round hasn't ended yet)
     int all_submitted = 1;
     for (int i = 0; i < PLAYERS_PER_ROOM; i++) {
         if (room->player_ids[i] >= 0 && !room->answer_submitted[i]) {
@@ -439,7 +441,8 @@ void handle_submit(Server *server, int client_idx, int row, int col) {
         }
     }
     
-    if (all_submitted) {
+    // Only end round once - check if we're already waiting for continue
+    if (all_submitted && !room->waiting_for_continue && room->game_started) {
         // Verify solution
         int correct = puzzle_verify_solution(&room->puzzle, room->submitted_answers);
         room_end_game(server, room_id, correct, 0);  // 0 = not timeout

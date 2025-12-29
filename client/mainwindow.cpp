@@ -144,6 +144,9 @@ void MainWindow::connectSignals()
     connect(networkManager, &NetworkManager::gameEnded, 
             stateMachine, &GameStateMachine::transitionToResult);
     
+    connect(networkManager, &NetworkManager::roundEnded, 
+            stateMachine, &GameStateMachine::transitionToResult);
+    
     connect(networkManager, &NetworkManager::gameAborted, [this](const QString &reason) {
         QMessageBox::warning(this, "Game Aborted", reason);
         stateMachine->transitionToLobby();
