@@ -24,10 +24,12 @@ int room_create(Server *server, const char *name) {
     room->player_count = 0;
     room->game_started = 0;
     room->host_index = -1;  // Will be set when first player joins
+    room->waiting_for_continue = 0;  // Not waiting for continue initially
     
     for (int i = 0; i < PLAYERS_PER_ROOM; i++) {
         room->player_ids[i] = -1;
         room->player_ready[i] = 0;
+        room->round_continue_ready[i] = 0;
     }
     
     printf("Room created: %s (ID: %d)\n", name, room_idx);

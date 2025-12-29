@@ -6,12 +6,17 @@
 ResultScreen::ResultScreen(NetworkManager *network, QWidget *parent)
     : QWidget(parent)
     , networkManager(network)
+    , isRoundEndScreen(false)
 {
     setupUI();
     
-    // Connect signal
+    // Connect signals
     connect(networkManager, &NetworkManager::gameEnded, 
             this, &ResultScreen::onGameEnded);
+    connect(networkManager, &NetworkManager::roundEnded,
+            this, &ResultScreen::onRoundEnded);
+    connect(networkManager, &NetworkManager::waitingForContinue,
+            this, &ResultScreen::onWaitingForContinue);
 }
 
 void ResultScreen::setupUI()
@@ -88,17 +93,72 @@ void ResultScreen::setupUI()
     backButton->setFont(buttonFont);
     mainLayout->addWidget(backButton, 0, Qt::AlignCenter);
     
-    // Connect button
+    // Continue button (for round end)
+    continueButton = new QPushButton("Continue to Next Round", this);
+    continueButton->setMinimumHeight(50);
+    continueButton->setMinimumWidth(250);
+    continueButton->setFont(buttonFont);
+    continueButton->setStyleSheet("QPushButton { background-color: #5cb85c; color: white; font-weight: bold; }"
+                                  "QPushButton:hover { background-color: #4cae4c; }"
+                                  "QPushButton:disabled { background-color: #cccccc; color: #666666; }");
+    continueButton->hide();  // Hidden by default
+    mainLayout->addWidget(continueButton, 0, Qt::AlignCenter);
+    
+    // Connect buttons
     connect(backButton, &QPushButton::clicked, this, &ResultScreen::onBackToRoomClicked);
+    connect(continueButton, &QPushButton::clicked, this, &ResultScreen::onContinueClicked);
 }
 
 void ResultScreen::onGameEnded(bool won, const QString &message)
 {
+    isRoundEndScreen = false;
     displayResult(won, message);
+}
+
+void ResultScreen::onRoundEnded(int currentRound, int totalRounds, const QString &message)
+{
+    isRoundEndScreen = true;
+    displayRoundEnd(currentRound, totalRounds, message);
+}
+
+void ResultScreen::onWaitingForContinue()
+{
+    // Disable continue button and show waiting message
+    continueButton->setEnabled(false);
+    continueButton->setText("Waiting for other players...");
+    messageLabel->setText("Waiting for all players to continue to the next round.");
+}
+
+void ResultScreen::displayRoundEnd(int currentRound, int totalRounds, const QString &message)
+{
+    // Show round complete screen
+    resultLabel->setText("🎉 ROUND COMPLETE! 🎉");
+    resultLabel->setStyleSheet("QLabel { color: #5cb85c; }");
+    
+    reasonLabel->setText(QString("Round %1/%2 completed successfully!").arg(currentRound).arg(totalRounds));
+    reasonLabel->setStyleSheet("QLabel { color: #5cb85c; font-size: 18px; }");
+    
+    solutionTitleLabel->hide();
+    solutionLabel->hide();
+    
+    messageLabel->setText(message);
+    messageLabel->setStyleSheet("QLabel { color: #333; font-size: 14px; }");
+    
+    // Show continue button, hide back button
+    backButton->hide();
+    continueButton->show();
+    continueButton->setEnabled(true);
+    continueButton->setText("Continue to Next Round");
 }
 
 void ResultScreen::displayResult(bool won, const QString &message)
 {
+    isRoundEndScreen = false;
+    
+    // Hide continue button, show back button for game end
+    continueButton->hide();
+    backButton->show();
+    
     if (won) {
         resultLabel->setText("🎉 VICTORY! 🎉");
         resultLabel->setStyleSheet("QLabel { color: green; }");
@@ -152,6 +212,17 @@ void ResultScreen::onBackToRoomClicked()
 {
     // Emit signal to go back to room screen
     emit backToRoomRequested();
+}
+
+void ResultScreen::onContinueClicked()
+{
+    // Send ready for next round to server
+    networkManager->sendReadyNextRound();
+    
+    // Disable button and show waiting message
+    continueButton->setEnabled(false);
+    continueButton->setText("Waiting for other players...");
+    messageLabel->setText("Waiting for all players to continue to the next round.");
 }
 
 

@@ -90,6 +90,8 @@ typedef struct {
     int all_submitted;
     int current_round;  // Current round (1-5)
     int total_rounds;   // Total rounds to win (default 5)
+    int round_continue_ready[PLAYERS_PER_ROOM];  // Track who is ready for next round
+    int waiting_for_continue;  // 1 if waiting for players to continue to next round
 } Room;
 
 // Client structure
@@ -146,6 +148,7 @@ void handle_start_game(Server *server, int client_idx);
 void handle_submit(Server *server, int client_idx, int row, int col);
 void handle_pong(Server *server, int client_idx);
 void handle_chat(Server *server, int client_idx, const char *message);
+void handle_ready_next_round(Server *server, int client_idx);
 
 // Room management
 int room_create(Server *server, const char *name);

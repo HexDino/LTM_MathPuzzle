@@ -383,6 +383,9 @@ void handle_message(Server *server, int client_idx, const char *message) {
     else if (strcmp(cmd, "CHAT") == 0) {
         handle_chat(server, client_idx, arg1);
     }
+    else if (strcmp(cmd, "READY_NEXT_ROUND") == 0) {
+        handle_ready_next_round(server, client_idx);
+    }
     else {
         client_send(client, "ERROR|Unknown command\n");
     }

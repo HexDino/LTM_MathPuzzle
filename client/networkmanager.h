@@ -55,6 +55,7 @@ public:
     void sendChat(const QString &message);
     void sendSubmit(int row, int col);
     void sendPong();
+    void sendReadyNextRound();  // Send ready for next round
     
     // Getters for current state
     QString getCurrentUsername() const { return currentUsername; }
@@ -102,6 +103,8 @@ signals:
     
     // Result signals
     void gameEnded(bool won, const QString &message);
+    void roundEnded(int currentRound, int totalRounds, const QString &message);  // Round ended, waiting for continue
+    void waitingForContinue();  // Player clicked continue, waiting for others
     void gameAborted(const QString &reason);
     
     // System signals

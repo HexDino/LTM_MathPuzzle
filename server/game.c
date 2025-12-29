@@ -104,22 +104,36 @@ void puzzle_generate(Puzzle *puzzle, int round) {
             p1 = (rand() % (max_val - min_val + 1)) + min_val;
             p2 = (rand() % (max_val - min_val + 1)) + min_val;
             p3 = (rand() % (max_val - min_val + 1)) + min_val;
-            p4 = apply_operator(apply_operator(p1, puzzle->op1, p2), puzzle->op2, p3);
+            // Use calculate_result to handle operator precedence correctly
+            p4 = calculate_result(p1, puzzle->op1, p2, puzzle->op2, p3);
             break;
             
         case FORMAT_P1_EQ_P2_P3_P4: // P1 = P2 op1 P3 op2 P4
             p2 = (rand() % (max_val - min_val + 1)) + min_val;
             p3 = (rand() % (max_val - min_val + 1)) + min_val;
             p4 = (rand() % (max_val - min_val + 1)) + min_val;
-            p1 = apply_operator(apply_operator(p2, puzzle->op1, p3), puzzle->op2, p4);
+            // Use calculate_result to handle operator precedence correctly
+            p1 = calculate_result(p2, puzzle->op1, p3, puzzle->op2, p4);
             break;
             
         case FORMAT_P1_P2_EQ_P3_P4: // P1 op1 P2 = P3 op2 P4
             p3 = (rand() % (max_val - min_val + 1)) + min_val;
             p4 = (rand() % (max_val - min_val + 1)) + min_val;
             p1 = (rand() % (max_val - min_val + 1)) + min_val;
-            p2 = apply_operator(p3, puzzle->op2, p4) - p1;
-            if (puzzle->op1 == OP_SUB) p2 = -p2;
+            
+            // Calculate right side: P3 op2 P4
+            int right_side = apply_operator(p3, puzzle->op2, p4);
+            
+            // Calculate P2 based on left side operator: P1 op1 P2 = right_side
+            if (puzzle->op1 == OP_ADD) {
+                p2 = right_side - p1;  // P1 + P2 = right_side => P2 = right_side - P1
+            } else if (puzzle->op1 == OP_SUB) {
+                p2 = p1 - right_side;  // P1 - P2 = right_side => P2 = P1 - right_side
+            } else if (puzzle->op1 == OP_MUL) {
+                p2 = (p1 != 0) ? right_side / p1 : right_side;  // P1 * P2 = right_side => P2 = right_side / P1
+            } else { // OP_DIV
+                p2 = (right_side != 0) ? p1 / right_side : p1;  // P1 / P2 = right_side => P2 = P1 / right_side
+            }
             break;
     }
     
@@ -148,11 +162,28 @@ void puzzle_generate(Puzzle *puzzle, int round) {
         puzzle->matrices[m].data[puzzle->solution_row[m]][puzzle->solution_col[m]] = puzzle->solution_values[m];
     }
     
-    printf("Round %d puzzle generated (format %d): P1(%d) %s P2(%d) %s P3(%d) = P4(%d)\n",
-           round, puzzle->format,
-           puzzle->solution_values[0], get_operator_string(puzzle->op1),
-           puzzle->solution_values[1], get_operator_string(puzzle->op2),
-           puzzle->solution_values[2], puzzle->solution_values[3]);
+    // Print puzzle based on actual format
+    printf("Round %d puzzle generated (format %d): ", round, puzzle->format);
+    switch (puzzle->format) {
+        case FORMAT_P1_P2_P3_EQ_P4:
+            printf("P1[%d] %s P2[%d] %s P3[%d] = P4[%d]\n",
+                   puzzle->solution_values[0], get_operator_string(puzzle->op1),
+                   puzzle->solution_values[1], get_operator_string(puzzle->op2),
+                   puzzle->solution_values[2], puzzle->solution_values[3]);
+            break;
+        case FORMAT_P1_EQ_P2_P3_P4:
+            printf("P1[%d] = P2[%d] %s P3[%d] %s P4[%d]\n",
+                   puzzle->solution_values[0], puzzle->solution_values[1],
+                   get_operator_string(puzzle->op1), puzzle->solution_values[2],
+                   get_operator_string(puzzle->op2), puzzle->solution_values[3]);
+            break;
+        case FORMAT_P1_P2_EQ_P3_P4:
+            printf("P1[%d] %s P2[%d] = P3[%d] %s P4[%d]\n",
+                   puzzle->solution_values[0], get_operator_string(puzzle->op1),
+                   puzzle->solution_values[1], puzzle->solution_values[2],
+                   get_operator_string(puzzle->op2), puzzle->solution_values[3]);
+            break;
+    }
 }
 
 // Send puzzle to clients (asymmetric information)
@@ -275,15 +306,19 @@ void room_end_game(Server *server, int room_id, int won, int timeout) {
     if (won) {
         // Check if there are more rounds
         if (room->current_round < room->total_rounds) {
-            // Continue to next round
-            snprintf(msg, sizeof(msg), "GAME_END|WIN|Round %d complete! Starting round %d...\n",
-                    room->current_round, room->current_round + 1);
+            // Round completed - wait for all players to continue
+            snprintf(msg, sizeof(msg), "ROUND_END|WIN|Round %d/%d complete! Waiting for all players to continue...\n",
+                    room->current_round, room->total_rounds);
             room_broadcast(server, room_id, msg, -1);
             
-            // Increment round and start next round
-            room->current_round++;
-            room_start_game(server, room_id);
-            return;  // Don't reset room state
+            // Set waiting state and reset continue ready flags
+            room->waiting_for_continue = 1;
+            for (int i = 0; i < PLAYERS_PER_ROOM; i++) {
+                room->round_continue_ready[i] = 0;
+            }
+            
+            printf("Waiting for all players to continue to round %d\n", room->current_round + 1);
+            return;  // Don't start next round yet, wait for READY_NEXT_ROUND from all players
         } else {
             // All rounds completed - player wins!
             snprintf(msg, sizeof(msg), "GAME_END|WIN|Congratulations! You completed all %d rounds!\n",
@@ -418,5 +453,64 @@ void broadcast_timer_update(Server *server, int room_id) {
     char msg[64];
     snprintf(msg, sizeof(msg), "TIMER|%d\n", room->game_time_remaining);
     room_broadcast(server, room_id, msg, -1);
+}
+
+// Handle player ready for next round
+void handle_ready_next_round(Server *server, int client_idx) {
+    Client *client = &server->clients[client_idx];
+    
+    if (client->state != STATE_IN_GAME && client->state != STATE_IN_ROOM) {
+        client_send(client, "ERROR|Not in a game\n");
+        return;
+    }
+    
+    int room_id = client->room_id;
+    if (room_id < 0 || room_id >= MAX_ROOMS) {
+        client_send(client, "ERROR|Invalid room\n");
+        return;
+    }
+    
+    Room *room = &server->rooms[room_id];
+    if (!room->active || !room->waiting_for_continue) {
+        client_send(client, "ERROR|Not waiting for continue\n");
+        return;
+    }
+    
+    int player_index = client->player_index;
+    
+    // Mark player as ready for next round
+    if (room->round_continue_ready[player_index]) {
+        printf("Player %s already ready for next round\n", client->username);
+        return;
+    }
+    
+    room->round_continue_ready[player_index] = 1;
+    printf("Player %s ready for next round (%d/%d)\n", 
+           client->username, player_index + 1, room->player_count);
+    
+    // Check if all players are ready
+    int all_ready = 1;
+    for (int i = 0; i < PLAYERS_PER_ROOM; i++) {
+        if (room->player_ids[i] >= 0 && !room->round_continue_ready[i]) {
+            all_ready = 0;
+            break;
+        }
+    }
+    
+    if (all_ready) {
+        printf("All players ready! Starting round %d\n", room->current_round + 1);
+        
+        // Reset waiting state
+        room->waiting_for_continue = 0;
+        
+        // Increment round and start next round
+        room->current_round++;
+        room_start_game(server, room_id);
+    } else {
+        // Notify this player that they're ready
+        char msg[128];
+        snprintf(msg, sizeof(msg), "WAIT_CONTINUE|Waiting for other players...\n");
+        client_send(client, msg);
+    }
 }
 

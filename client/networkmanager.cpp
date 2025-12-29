@@ -140,6 +140,11 @@ void NetworkManager::sendPong()
     sendCommand("PONG");
 }
 
+void NetworkManager::sendReadyNextRound()
+{
+    sendCommand("READY_NEXT_ROUND");
+}
+
 void NetworkManager::onConnected()
 {
     qDebug() << "Connected to server";
@@ -349,6 +354,17 @@ void NetworkManager::handleMessage(const QString &message)
             }
             emit gameEnded(won, msg);
         }
+    }
+    else if (command == "ROUND_END") {
+        // Format: ROUND_END|WIN|message
+        if (parts.size() >= 3) {
+            QString msg = parts[2];
+            emit roundEnded(gameData.currentRound, gameData.totalRounds, msg);
+        }
+    }
+    else if (command == "WAIT_CONTINUE") {
+        // Format: WAIT_CONTINUE|message
+        emit waitingForContinue();
     }
     else if (command == "GAME_ABORTED") {
         if (parts.size() > 1) {
