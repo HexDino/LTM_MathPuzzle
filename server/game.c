@@ -119,20 +119,53 @@ void puzzle_generate(Puzzle *puzzle, int round) {
         case FORMAT_P1_P2_EQ_P3_P4: // P1 op1 P2 = P3 op2 P4
             p3 = (rand() % (max_val - min_val + 1)) + min_val;
             p4 = (rand() % (max_val - min_val + 1)) + min_val;
-            p1 = (rand() % (max_val - min_val + 1)) + min_val;
             
             // Calculate right side: P3 op2 P4
             int right_side = apply_operator(p3, puzzle->op2, p4);
             
-            // Calculate P2 based on left side operator: P1 op1 P2 = right_side
+            // Generate P1 and P2 to ensure equation has integer solution
             if (puzzle->op1 == OP_ADD) {
-                p2 = right_side - p1;  // P1 + P2 = right_side => P2 = right_side - P1
+                // P1 + P2 = right_side
+                p1 = (rand() % (max_val - min_val + 1)) + min_val;
+                p2 = right_side - p1;  // P2 = right_side - P1
             } else if (puzzle->op1 == OP_SUB) {
-                p2 = p1 - right_side;  // P1 - P2 = right_side => P2 = P1 - right_side
+                // P1 - P2 = right_side => P2 = P1 - right_side
+                p1 = (rand() % (max_val - min_val + 1)) + min_val;
+                p2 = p1 - right_side;
             } else if (puzzle->op1 == OP_MUL) {
-                p2 = (p1 != 0) ? right_side / p1 : right_side;  // P1 * P2 = right_side => P2 = right_side / P1
+                // P1 * P2 = right_side
+                // Generate P1 first, then calculate P2 = right_side / P1
+                // To ensure integer division, make sure right_side is divisible by P1
+                if (right_side == 0) {
+                    p1 = 1;
+                    p2 = 0;
+                } else {
+                    // Find a divisor of right_side as P1
+                    int divisors[100];
+                    int div_count = 0;
+                    for (int d = 1; d <= abs(right_side) && div_count < 100; d++) {
+                        if (right_side % d == 0) {
+                            if (d >= min_val && d <= max_val) {
+                                divisors[div_count++] = d;
+                            }
+                        }
+                    }
+                    if (div_count > 0) {
+                        p1 = divisors[rand() % div_count];
+                        p2 = right_side / p1;
+                    } else {
+                        // Fallback: just pick random and accept integer division error
+                        p1 = (rand() % (max_val - min_val + 1)) + min_val;
+                        if (p1 == 0) p1 = 1;
+                        p2 = right_side / p1;
+                    }
+                }
             } else { // OP_DIV
-                p2 = (right_side != 0) ? p1 / right_side : p1;  // P1 / P2 = right_side => P2 = P1 / right_side
+                // P1 / P2 = right_side => P1 = right_side * P2
+                // Generate P2 first, then calculate P1
+                p2 = (rand() % (max_val - min_val + 1)) + min_val;
+                if (p2 == 0) p2 = 1;
+                p1 = right_side * p2;  // This ensures P1 / P2 = right_side exactly
             }
             break;
     }
