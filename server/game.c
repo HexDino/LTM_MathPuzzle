@@ -144,22 +144,52 @@ void puzzle_generate(Puzzle *puzzle, int round) {
     puzzle->solution_values[3] = p4;
     puzzle->result = (puzzle->format == FORMAT_P1_EQ_P2_P3_P4) ? p1 : p4;
     
-    // Generate matrices with random numbers
+    // Generate matrices with UNIQUE random numbers (no duplicates)
     for (int m = 0; m < PLAYERS_PER_ROOM; m++) {
-        for (int i = 0; i < MATRIX_SIZE; i++) {
-            for (int j = 0; j < MATRIX_SIZE; j++) {
-                if (allow_negative) {
-                    puzzle->matrices[m].data[i][j] = (rand() % (max_val - min_val + 1)) + min_val;
-                } else {
-                    puzzle->matrices[m].data[i][j] = (rand() % max_val) + 1;
+        int solution_value = puzzle->solution_values[m];
+        int available_numbers[1000];  // Pool of available numbers
+        int pool_size = 0;
+        
+        // Create pool of numbers (excluding the solution value to avoid duplicates initially)
+        if (allow_negative) {
+            for (int n = min_val; n <= max_val; n++) {
+                if (n != solution_value) {
+                    available_numbers[pool_size++] = n;
+                }
+            }
+        } else {
+            for (int n = 1; n <= max_val; n++) {
+                if (n != solution_value) {
+                    available_numbers[pool_size++] = n;
                 }
             }
         }
         
-        // Place solution value at random position
+        // Shuffle the pool using Fisher-Yates algorithm
+        for (int i = pool_size - 1; i > 0; i--) {
+            int j = rand() % (i + 1);
+            int temp = available_numbers[i];
+            available_numbers[i] = available_numbers[j];
+            available_numbers[j] = temp;
+        }
+        
+        // Fill matrix with unique numbers from shuffled pool
+        int pool_idx = 0;
+        for (int i = 0; i < MATRIX_SIZE; i++) {
+            for (int j = 0; j < MATRIX_SIZE; j++) {
+                if (pool_idx < pool_size) {
+                    puzzle->matrices[m].data[i][j] = available_numbers[pool_idx++];
+                } else {
+                    // Fallback if pool exhausted (shouldn't happen with large enough pool)
+                    puzzle->matrices[m].data[i][j] = (rand() % (max_val - min_val + 1)) + min_val;
+                }
+            }
+        }
+        
+        // Place solution value at random position (overwrite one number)
         puzzle->solution_row[m] = rand() % MATRIX_SIZE;
         puzzle->solution_col[m] = rand() % MATRIX_SIZE;
-        puzzle->matrices[m].data[puzzle->solution_row[m]][puzzle->solution_col[m]] = puzzle->solution_values[m];
+        puzzle->matrices[m].data[puzzle->solution_row[m]][puzzle->solution_col[m]] = solution_value;
     }
     
     // Print puzzle based on actual format
